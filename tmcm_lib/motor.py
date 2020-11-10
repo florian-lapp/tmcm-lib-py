@@ -3,17 +3,18 @@ from .switch import Switch
 from .direction import Direction
 from .exceptions import *
 
+import abc
 import enum
 import time
 
-class Motor :
+class Motor(abc.ABC) :
 
-    POSITION_MINIMUM   : int = -2_147_483_648
-    POSITION_MAXIMUM   : int = +2_147_483_647
-    DIFFERENCE_MINIMUM : int = -2_147_483_648
-    DIFFERENCE_MAXIMUM : int = +2_147_483_647
+    POSITION_MINIMUM   = -2_147_483_648
+    POSITION_MAXIMUM   = +2_147_483_647
+    DIFFERENCE_MINIMUM = -2_147_483_648
+    DIFFERENCE_MAXIMUM = +2_147_483_647
 
-    MICROSTEP_RESOLUTIONS : {int} = {1, 2, 4, 8, 16, 32, 64, 128, 256}
+    MICROSTEP_RESOLUTIONS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
 
     # Standby delay extrema in units of milliseconds.
     STANDBY_DELAY_MINIMUM = 10
@@ -23,6 +24,9 @@ class Motor :
     FREEWHEELING_DELAY_DISABLE = 0
     FREEWHEELING_DELAY_MINIMUM = 10
     FREEWHEELING_DELAY_MAXIMUM = 10 * 65_535
+
+    # Delay between moving polls while waiting in units of seconds.
+    MOVING_POLL_DELAY = 0.05
 
     @property
     def module(self) -> Module :
@@ -71,7 +75,12 @@ class Motor :
 
         Note: The value is rounded down to the next lower motor current step of the module.
         """
-        self.__current_moving = self.__current_moving_set_external(value)
+        value_internal = self.__module._motor_current_internal(value)
+        if value_internal == self.__current_moving_internal :
+            return
+        self._current_moving_set(value_internal)
+        self.__current_moving_internal = value_internal
+        self.__current_moving = self.__module._motor_current_external(value_internal)
 
     @property
     def current_standby(self) -> int :
@@ -93,7 +102,12 @@ class Motor :
 
         Note: The value is rounded down to the next lower motor current step of the module.
         """
-        self.__current_standby = self.__current_standby_set_external(value)
+        value_internal = self.__module._motor_current_internal(value)
+        if value_internal == self.__current_standby_internal :
+            return
+        self._current_standby_set(value_internal)
+        self.__current_standby_internal = value_internal
+        self.__current_standby = self.__module._motor_current_external(value_internal)
 
     @property
     def velocity_minimum(self) -> float :
@@ -122,8 +136,17 @@ class Motor :
         Values: [`velocity_minimum`, `velocity_maximum`]
 
         Note: The value is rounded down to the next lower motor velocity step of the module.
+        Note: The moving velocity can not be set while the motor is moving.
+        Note: Changing the moving velocity sometimes moves the motor by one microstep.
         """
+        if value < self.__velocity_minimum or value > self.__velocity_maximum :
+            raise ValueError('Velocity invalid.')
+        if self.moving :
+            raise ExceptionState()
+        if value == self.__velocity_moving :
+            return
         self.__velocity_moving_set_external(value)
+        self.__acceleration_extrema_update()
 
     @property
     def velocity(self) -> (float, Direction) :
@@ -168,8 +191,26 @@ class Motor :
         Values: [`acceleration_minimum`, `acceleration_maximum`]
 
         Note: The value is rounded down to the next lower motor acceleration step of the module.
+        Note: The moving acceleration can not be set while the motor is moving.
         """
+        if value < self.__acceleration_minimum or value > self.__acceleration_maximum :
+            raise ValueError('Acceleration invalid.')
+        if self.moving :
+            raise ExceptionState()
+        if value == self.__acceleration_moving :
+            return
         self.__acceleration_moving_set_external(value)
+
+    @property
+    def acceleration(self) -> float :
+        """
+        Gets the acceleration of the motor in units of fullsteps per square second.
+
+        Values: [-`acceleration_moving`, `acceleration_moving`]
+        """
+        if not self.__moving :
+            return 0.0
+        return self.__acceleration_actual_get_external()
 
     @property
     def position(self) -> int :
@@ -218,15 +259,10 @@ class Motor :
         return self._position_target_get()
 
     @property
-    def position_reached(self) -> bool :
-        """Gets if the motor has reached its target position."""
-        return self._position_reached_get()
-
-    @property
     def moving(self) -> bool :
+        """Gets if the motor is moving."""
         if not self.__moving :
             return False
-        """Gets if the motor is moving."""
         return self.__moving_detect()
 
     @property
@@ -248,8 +284,22 @@ class Motor :
         This value dictates the maximum velocity of the motor.
         If the resulting maximum velocity exceeds the moving velocity, the moving velocity is
         reduced to the maximum velocity.
+
+        Note: The microstep resolution can not be set while the motor is moving.
         """
-        self.__microstep_resolution_set_external(value)
+        try :
+            value_internal = Motor.__MicrostepResolution[value]
+        except KeyError :
+            raise ValueError('Microstep resolution invalid.')
+        else :
+            if self.moving :
+                raise ExceptionState()
+            if value == self.__microstep_resolution :
+                return
+            self._microstep_resolution_set(value_internal)
+            self.__microstep_resolution = value
+            self.__velocity_extrema_update()
+            self.__acceleration_extrema_update()
 
     @property
     def standby_delay(self) -> int :
@@ -267,7 +317,14 @@ class Motor :
 
         Values: [`STANDBY_DELAY_MINIMUM`, `STANDBY_DELAY_MAXIMUM`]
         """
-        self.__standby_delay_set_external(value)
+        if value < Motor.STANDBY_DELAY_MINIMUM or value > Motor.STANDBY_DELAY_MAXIMUM :
+            raise ValueError("Standby delay invalid.")
+        value_internal = value // 10
+        value = 10 * value_internal
+        if value == self.__standby_delay :
+            return
+        self._standby_delay_set(value_internal)
+        self.__standby_delay = value
 
     @property
     def freewheeling_delay(self) -> int :
@@ -287,7 +344,16 @@ class Motor :
         Values: `FREEWHEELING_DELAY_DISABLE`, [`FREEWHEELING_DELAY_MINIMUM`,
         `FREEWHEELING_DELAY_MAXIMUM`]
         """
-        self.__freewheeling_delay_set_external(value)
+        if value != Motor.FREEWHEELING_DELAY_DISABLE and (
+            value < Motor.FREEWHEELING_DELAY_MINIMUM or value > Motor.FREEWHEELING_DELAY_MAXIMUM
+        ) :
+            raise ValueError("Freewheeling delay invalid.")
+        value_internal = value // 10
+        value = 10 * value_internal
+        if value == self.__freewheeling_delay :
+            return
+        self._freewheeling_delay_set(value_internal)
+        self.__freewheeling_delay = value
 
     class Coordinates :
         """Coordinates of a motor."""
@@ -368,7 +434,7 @@ class Motor :
         Values: [0, `model.coordinate_count`)
         """
         if coordinate_number >= self.__module.coordinate_count :
-            raise ValueError('Coordinate number invalid')
+            raise ValueError('Coordinate number invalid.')
         self._move_indicate(Motor._RampMode.POSITION)
         self.__module._motor_move_to_coordinate(self.__number, coordinate_number)
         if wait_while_moving :
@@ -404,17 +470,17 @@ class Motor :
     def wait_while_moving(self) -> None :
         """Waits while the motor is moving."""
         while self.moving :
-            time.sleep(0.125)
+            time.sleep(Motor.MOVING_POLL_DELAY)
 
     @staticmethod
     def _position_verify(value : int) -> None :
         if value < Motor.POSITION_MINIMUM or value > Motor.POSITION_MAXIMUM :
-            raise ValueError('Position invalid')
+            raise ValueError('Position invalid.')
 
     @staticmethod
     def _difference_verify(value : int) -> None :
         if value < Motor.DIFFERENCE_MINIMUM or value > Motor.DIFFERENCE_MAXIMUM :
-            raise ValueError('Difference invalid')
+            raise ValueError('Difference invalid.')
 
     def __init__(self, module : Module, number : int) -> None :
         self.__module = module
@@ -422,20 +488,75 @@ class Motor :
         self.__switch_limit_right = Switch(self, Switch.Type.LIMIT_RIGHT)
         self.__switch_limit_left = Switch(self, Switch.Type.LIMIT_LEFT)
         self.__switch_home = Switch(self, Switch.Type.HOME)
-        self.__current_moving = self.__current_moving_get_external()
-        self.__current_standby = self.__current_standby_get_external()
+        self.__current_moving_internal = self._current_moving_get()
+        self.__current_moving = self.__module._motor_current_external(
+            self.__current_moving_internal
+        )
+        self.__current_standby_internal = self._current_standby_get()
+        self.__current_standby = self.__module._motor_current_external(
+            self.__current_standby_internal
+        )
         self.__microstep_resolution = self.__microstep_resolution_get_external()
         self.__standby_delay = self.__standby_delay_get_external()
         self.__freewheeling_delay = self.__freewheeling_delay_get_external()
         self.__pulse_divisor_exponent_valid = False
         self.__pulse_divisor_exponent = 0
+        self.__ramp_divisor_exponent_valid = False
+        self.__ramp_divisor_exponent = 0
+        self.__position_valid = False
+        self.__position = 0
         self.__velocity_moving_internal = self._velocity_moving_get()
-        self.__velocity_moving = self.__velocity_moving_external(self.__velocity_moving_internal)
+        self.__velocity_moving = self._velocity_external(
+            self.__velocity_moving_internal
+        )
+        self.__acceleration_moving_internal = self._acceleration_moving_get()
+        self.__acceleration_moving = self._acceleration_external(
+            self.__acceleration_moving_internal
+        )
         self.__velocity_extrema_update()
-        self.__acceleration_moving = self.__acceleration_moving_get_external()
         self.__acceleration_extrema_update()
         self.__coordinates = Motor.Coordinates(module, number)
         self._move_indicate(self._ramp_mode_get())
+
+    @abc.abstractmethod
+    def _velocity_moving_set_external(self, value : float) -> int :
+        """
+        Sets the moving velocity of the motor in units of fullsteps per second (rounded down to the
+        next lower motor velocity step of the module).
+
+        Returns the value set in internal units.
+        """
+        pass
+
+    @abc.abstractmethod
+    def _velocity_external(self, value : int) -> float :
+        """Converts a velocity of the motor from internal units in units of fullsteps per second."""
+        pass
+
+    @abc.abstractmethod
+    def _acceleration_extrema_get_external(self) -> (float, float) :
+        """
+        Gets the minimum and maximum moving acceleration of the motor in units of fullsteps per
+        square second.
+        """
+        pass
+
+    @abc.abstractmethod
+    def _acceleration_moving_set_external(self, value : float) -> int :
+        """
+        Sets the moving acceleration of the motor in units of fullsteps per square second (rounded
+        down to the next lower motor acceleration step of the module).
+
+        Returns the value set in internal units.
+        """
+        pass
+
+    @abc.abstractmethod
+    def _acceleration_external(self, value : int) -> float :
+        """
+        Converts an acceleration of the motor from internal units in units of fullsteps per second.
+        """
+        pass
 
     def _position_target_set(self, value : int) -> None :
         self.__parameter_set(Motor.__Parameter.POSITION_TARGET, value)
@@ -455,9 +576,14 @@ class Motor :
 
     def _pulse_divisor_exponent_set(self, value : int) -> None :
         """Sets the exponent of the pulse divisor of the motor."""
+        if self.__pulse_divisor_exponent_valid and self.__pulse_divisor_exponent == value :
+            return
         self.__parameter_set(Motor.__Parameter.PULSE_DIVISOR_EXPONENT, value)
         self.__pulse_divisor_exponent = value
         self.__pulse_divisor_exponent_valid = True
+        # Note: Setting the pulse divisor sometimes moves the motor by one microstep.
+        # Therefore: Invalidate position.
+        self.__position_valid = False
 
     def _pulse_divisor_exponent_get(self) -> int :
         """Gets the exponent of the pulse divisor of the motor."""
@@ -470,11 +596,20 @@ class Motor :
 
     def _ramp_divisor_exponent_set(self, value : int) -> None :
         """Sets the exponent of the ramp divisor of the motor."""
+        if self.__ramp_divisor_exponent_valid and self.__ramp_divisor_exponent == value :
+            return
         self.__parameter_set(Motor.__Parameter.RAMP_DIVISOR_EXPONENT, value)
+        self.__ramp_divisor_exponent = value
+        self.__ramp_divisor_exponent_valid = True
 
     def _ramp_divisor_exponent_get(self) -> int :
         """Gets the exponent of the ramp divisor of the motor."""
-        return self.__parameter_get(Motor.__Parameter.RAMP_DIVISOR_EXPONENT)
+        if self.__ramp_divisor_exponent_valid :
+            return self.__ramp_divisor_exponent
+        value = self.__parameter_get(Motor.__Parameter.RAMP_DIVISOR_EXPONENT)
+        self.__ramp_divisor_exponent = value
+        self.__ramp_divisor_exponent_valid = True
+        return value
 
     def _velocity_target_set(self, value : int) -> None :
         self.__parameter_set(Motor.__Parameter.VELOCITY_TARGET, value)
@@ -505,6 +640,14 @@ class Motor :
         The unit depends on the module.
         """
         return self.__parameter_get(Motor.__Parameter.VELOCITY_MOVING)
+
+    def _acceleration_actual_get(self) -> int :
+        """
+        Gets the actual acceleration of the motor.
+
+        The unit depends on the module.
+        """
+        return self.__parameter_get(Motor.__Parameter.ACCELERATION_ACTUAL)
 
     def _acceleration_moving_set(self, value : int) -> None :
         """
@@ -604,7 +747,10 @@ class Motor :
         """Gets if the home switch of the motor is active."""
         return self.__parameter_get_bool(Motor.__Parameter.SWITCH_HOME_ACTIVE)
 
-    def _move_indicate(self, ramp_mode : _RampMode) -> None :
+    def _move_indicate(
+        self,
+        ramp_mode : _RampMode
+    ) -> None :
         """Indicates a move of the motor."""
         self.__ramp_mode = ramp_mode
         self.__moving = True
@@ -672,100 +818,17 @@ class Motor :
     def __parameter_get_bool(self, parameter : __Parameter) -> bool :
         return bool(self.__parameter_get(parameter))
 
-    def __current_moving_set_external(self, value : int) -> int :
-        """
-        Sets the moving current of the motor in units of milliamperes (rounded down to the next
-        lower motor current step of the module).
-
-        Returns the value set.
-        """
-        value_internal = self.__module._motor_current_internal(value)
-        self._current_moving_set(value_internal)
-        return self.__module._motor_current_external(value_internal)
-
-    def __current_moving_get_external(self) -> int :
-        """Gets the moving current of the motor in units of milliamperes."""
-        return self.__module._motor_current_external(self._current_moving_get())
-
-    def __current_standby_set_external(self, value : int) -> int :
-        """
-        Sets the standby current of the motor in units of milliamperes (rounded down to the next
-        lower motor current step of the module).
-
-        Returns the value set.
-        """
-        value_internal = self.__module._motor_current_internal(value)
-        self._current_standby_set(value_internal)
-        return self.__module._motor_current_external(value_internal)
-
-    def __current_standby_get_external(self) -> int :
-        """Gets the standby current of the motor in units of milliamperes."""
-        return self.__module._motor_current_external(self._current_standby_get())
-
-    def __microstep_resolution_set_external(self, value : int) -> None :
-        """Sets the microstep resolution of the motor in units of microsteps per fullstep."""
-        if value == self.__microstep_resolution :
-            return
-        try :
-            value_internal = Motor.__MicrostepResolution[value]
-        except KeyError :
-            raise ValueError('Microstep resolution invalid.')
-        else :
-            self._microstep_resolution_set(value_internal)
-            self.__microstep_resolution = value
-            self.__velocity_extrema_update()
-            self.__acceleration_extrema_update()
-
     def __microstep_resolution_get_external(self) -> int :
         """Gets the microstep resolution of the motor in units of microsteps per fullstep."""
         return 2 ** self._microstep_resolution_get()
-
-    def __standby_delay_set_external(self, value : int) -> None :
-        """Sets the standby delay of the motor in units of milliseconds."""
-        if value < Motor.STANDBY_DELAY_MINIMUM or value > Motor.STANDBY_DELAY_MAXIMUM :
-            raise ValueError("Standby delay invalid.")
-        value_internal = value // 10
-        self._standby_delay_set(value_internal)
-        self.__standby_delay = 10 * value_internal
 
     def __standby_delay_get_external(self) -> int :
         """Gets the standby delay of the motor in units of milliseconds."""
         return 10 * self._standby_delay_get()
 
-    def __freewheeling_delay_set_external(self, value : int) -> None :
-        """Sets the freewheeling delay of the motor in units of milliseconds."""
-        if value == Motor.FREEWHEELING_DELAY_DISABLE :
-            self._freewheeling_delay_set(0)
-            self.__freewheeling_delay = 0
-            return
-        if value < Motor.FREEWHEELING_DELAY_MINIMUM or value > Motor.FREEWHEELING_DELAY_MAXIMUM :
-            raise ValueError("Freewheeling delay invalid.")
-        value_internal = value // 10
-        self._freewheeling_delay_set(value_internal)
-        self.__freewheeling_delay = 10 * value_internal
-
     def __freewheeling_delay_get_external(self) -> int :
         """Gets the freewheeling delay of the motor in units of milliseconds."""
         return 10 * self._freewheeling_delay_get()
-
-    def __velocity_moving_set_external(self, value : float) -> None :
-        """
-        Sets the moving velocity of the motor in units of fullsteps per second (rounded down to the
-        next lower motor velocity step of the module).
-        """
-        if value < self.__velocity_minimum or value > self.__velocity_maximum :
-            raise ValueError('Velocity invalid')
-        (
-            self.__velocity_moving_internal,
-            self.__velocity_moving
-        ) = self.__module._motor_velocity_moving_set_external(self, value)
-        self.__acceleration_extrema_update()
-
-    def __velocity_moving_external(self, value : int) -> float :
-        """
-        Converts a velocity of the motor from internal units into units of fullsteps per second.
-        """
-        return self.__module._motor_velocity_external(self, value)
 
     def __velocity_actual_get_external(self) -> (float, Direction) :
         """
@@ -775,44 +838,50 @@ class Motor :
         value_internal = self._velocity_actual_get()
         value_internal_sign = (value_internal > 0) - (value_internal < 0)
         return (
-            self.__velocity_moving_external(value_internal * value_internal_sign),
+            self._velocity_external(value_internal * value_internal_sign),
             Direction(value_internal_sign)
         )
+
+    def __velocity_moving_set_external(self, value : float) -> None :
+        value_internal = self._velocity_moving_set_external(value)
+        if self.__velocity_moving_internal != value_internal :
+            self._velocity_moving_set(value_internal)
+            self.__velocity_moving_internal = value_internal
+        self.__velocity_moving = self._velocity_external(value_internal)
 
     def __velocity_extrema_update(self) -> None :
         minimum = self.__module.motor_frequency_minimum / self.__microstep_resolution
         maximum = self.__module.motor_frequency_maximum / self.__microstep_resolution
+        moving = self.__velocity_moving
         self.__velocity_minimum = minimum
         self.__velocity_maximum = maximum
-        if self.__velocity_moving < minimum :
-            self.velocity_moving = minimum
-        elif self.__velocity_moving > maximum :
-            self.velocity_moving = maximum
+        if moving < minimum :
+            moving = minimum
+        elif moving > maximum :
+            moving = maximum
+        self.__velocity_moving_set_external(moving)
+
+    def __acceleration_actual_get_external(self) -> float :
+        """Gets the actual acceleration of the motor in units of fullsteps per square second."""
+        return self._acceleration_external(self._acceleration_actual_get())
 
     def __acceleration_moving_set_external(self, value : float) -> None :
-        """
-        Sets the moving acceleration of the motor in units of fullsteps per square second (rounded
-        down to the next lower motor velocity step of the module).
-        """
-        if value < self.__acceleration_minimum or value > self.__acceleration_maximum :
-            raise ValueError('Acceleration invalid')
-        self.__acceleration_moving = self.__module._motor_acceleration_moving_set_external(
-            self,
-            value
-        )
-
-    def __acceleration_moving_get_external(self) -> float :
-        """Gets the moving acceleration of the motor in units of fullsteps per square second."""
-        return self.__module._motor_acceleration_moving_get_external(self)
+        value_internal = self._acceleration_moving_set_external(value)
+        if value_internal != self.__acceleration_moving_internal :
+            self._acceleration_moving_set(value_internal)
+            self.__acceleration_moving_internal = value_internal
+        self.__acceleration_moving = self._acceleration_external(value_internal)
 
     def __acceleration_extrema_update(self) -> None :
-        (minimum, maximum) = self.__module._motor_acceleration_extrema_get_external(self)
+        (minimum, maximum) = self._acceleration_extrema_get_external()
+        moving = self.__acceleration_moving
         self.__acceleration_minimum = minimum
         self.__acceleration_maximum = maximum
-        if self.__acceleration_moving < minimum :
-            self.acceleration_moving = minimum
-        elif self.__acceleration_moving > maximum :
-            self.acceleration_moving = maximum
+        if moving < minimum :
+            moving = minimum
+        elif moving > maximum :
+            moving = maximum
+        self.__acceleration_moving_set_external(moving)
 
     def __moving_detect_false(self) -> bool :
         return False

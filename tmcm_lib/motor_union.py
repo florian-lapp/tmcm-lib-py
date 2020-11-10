@@ -37,12 +37,12 @@ class MotorUnion :
         return self.__module
 
     @property
-    def motors(self) -> (Motor, ...) :
+    def motors(self) -> typing.Tuple[Motor, ...] :
         """Gets the motors of the motor union."""
         return self.__motors
 
     @property
-    def positions(self) -> (int, ...) :
+    def positions(self) -> typing.Tuple[int, ...] :
         """Gets the positions of the motor union in units of microsteps."""
         return tuple(motor.position for motor in self.__motors)
 
@@ -88,10 +88,16 @@ class MotorUnion :
         if wait_while_moving :
             self.wait_while_moving()
 
+    def stop(self, wait_while_moving : bool = True) -> None :
+        for motor in self.__motors :
+            motor.stop(False)
+        if wait_while_moving :
+            self.wait_while_moving()
+
     def wait_while_moving(self) -> None :
         """Waits while the motor union is moving."""
         while self.moving :
-            time.sleep(0.125)
+            time.sleep(Motor.MOVING_POLL_DELAY)
 
     __MOVE_SYNCHRONOUSLY = 0x40
     __MOVE_ASYNCHRONOUSLY = 0x80

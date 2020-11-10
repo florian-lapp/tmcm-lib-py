@@ -58,7 +58,7 @@ class Module(abc.ABC) :
             | True  : Active high
             | False : Active low
         """
-        return not self._switch_limit_polarity_get()
+        return self.__switch_limit_activity
 
     @switch_limit_activity.setter
     def switch_limit_activity(self, activity : bool) -> None :
@@ -69,7 +69,10 @@ class Module(abc.ABC) :
             | True  : Active high
             | False : Active low
         """
+        if activity == self.__switch_limit_activity :
+            return
         self._switch_limit_polarity_set(not activity)
+        self.__switch_limit_activity = activity
 
     def factory_settings_restore(self) -> None :
         """Restores the factory settings of the module."""
@@ -184,6 +187,7 @@ class Module(abc.ABC) :
         motor_current_maximum : int,
         motor_frequency_minimum : float,
         motor_frequency_maximum : float,
+        motor_class : typing.Type['Motor'],
         coordinate_count : int
     ) -> None :
         identity_, firmware_version = self.__firmware_version_get(port)
@@ -196,47 +200,12 @@ class Module(abc.ABC) :
         self.__motor_current_maximum = motor_current_maximum
         self.__motor_frequency_minimum = motor_frequency_minimum
         self.__motor_frequency_maximum = motor_frequency_maximum
+        self.__switch_limit_activity = not self._switch_limit_polarity_get()
         self.__coordinates = Module.Coordinates(self, coordinate_count, motor_count)
-        from .motor import Motor
-        self.__motors = tuple(Motor(self, motor_number) for motor_number in range(motor_count))
-
-    @abc.abstractmethod
-    def _motor_velocity_moving_set_external(self, motor : 'Motor', value : float) -> (int, float) :
-        """
-        Sets the moving velocity of a motor in units of fullsteps per second (rounded down to the
-        next lower motor velocity step of the module).
-
-        Returns the value set (internal and external).
-        """
-        pass
-
-    @abc.abstractmethod
-    def _motor_velocity_external(self, motor : 'Motor', value : int) -> float :
-        """Converts a velocity of a motor from internal units in units of fullsteps per second."""
-        pass
-
-    @abc.abstractmethod
-    def _motor_acceleration_extrema_get_external(self, motor : 'Motor') -> (float, float) :
-        """
-        Gets the minimum and maximum moving acceleration of a motor in units of fullsteps per
-        square second.
-        """
-        pass
-
-    @abc.abstractmethod
-    def _motor_acceleration_moving_set_external(self, motor : 'Motor', value : float) -> int :
-        """
-        Sets the moving acceleration of a motor in units of fullsteps per square second (rounded
-        down to the next lower motor acceleration step of the module).
-
-        Returns the value set.
-        """
-        pass
-
-    @abc.abstractmethod
-    def _motor_acceleration_moving_get_external(self, motor : 'Motor') -> float :
-        """Gets the moving acceleration of a motor in units of fullsteps per square second."""
-        pass
+        self.__motors = tuple(
+            motor_class(self, motor_number)
+            for motor_number in range(motor_count)
+        )
 
     def _motor_current_internal(self, value : int) -> int :
         """
@@ -371,7 +340,7 @@ class Module(abc.ABC) :
             difference
         )
 
-    __MODULE_NAME = 'module_tmcm_{:04d}'
+    __MODULE_NAME = 'tmcm_{:04d}.module'
     __CLASS_NAME = 'Module'
 
     class __Command(enum.IntEnum) :
@@ -459,7 +428,12 @@ class Module(abc.ABC) :
         ]
         data[8] = cls.__command_checksum_calculate(data[0 : 8])
         # DEBUG
-        # print(command_number, type_number, bank_number, value)
+        # print(
+        #     command_number.name,
+        #     type_number.name if hasattr(type_number, 'name') else type_number,
+        #     bank_number,
+        #     value
+        # )
         port.transfer(bytes(data))
 
     def __command_request_transfer(
@@ -504,10 +478,10 @@ class Module(abc.ABC) :
     def __command_transceive_port(
         cls,
         port : Port,
-        command_number: int,
-        type_number: int = 0,
-        bank_number: int = 0,
-        value: int = 0
+        command_number : int,
+        type_number : int = 0,
+        bank_number : int = 0,
+        value : int = 0
     ) -> int :
         cls.__command_request_transfer_port(
             port,
@@ -516,7 +490,16 @@ class Module(abc.ABC) :
             bank_number,
             value
         )
-        return cls.__command_reply_receive_port(port)
+        value_return = cls.__command_reply_receive_port(port)
+        # DEBUG
+        # print(
+        #     command_number.name,
+        #     type_number.name if hasattr(type_number, 'name') else type_number,
+        #     bank_number,
+        #     value,
+        #     value_return
+        # )
+        return value_return
 
     def __command_transceive(
         self,
