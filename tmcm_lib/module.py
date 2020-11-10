@@ -332,12 +332,12 @@ class Module(abc.ABC) :
             coordinate_number
         )
 
-    def _motor_move_by(self, motor_number : int, difference : int) -> None :
+    def _motor_move_by(self, motor_number : int, distance : int) -> None :
         self.__command_transceive(
             Module.__Command.MVP,
             Module.__MVP_TYPE_RELATIVE,
             motor_number,
-            difference
+            distance
         )
 
     __MODULE_NAME = 'tmcm_{:04d}.module'

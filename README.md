@@ -42,7 +42,7 @@ motor.switch_limit_right.enabled = True
 Blocking moves wait while the motor is moving.
 
 ``` python
-# Moves the motor relatively by the given difference in units of microsteps.
+# Moves the motor relatively by the given distance in units of microsteps.
 motor.move_by(512_000)
 # Moves the motor absolutely to the given position in units of microsteps.
 motor.move_to(0)
@@ -55,7 +55,7 @@ motor.move_right()
 Non-blocking moves return immediately after initiating the move.
 
 ``` python
-# Moves the motor relatively by the given difference in units of microsteps.
+# Moves the motor relatively by the given distance in units of microsteps.
 motor.move_by(512_000, False)
 # Waits while the motor is moving.
 motor.wait_while_moving()

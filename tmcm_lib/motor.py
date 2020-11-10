@@ -9,10 +9,10 @@ import time
 
 class Motor(abc.ABC) :
 
-    POSITION_MINIMUM   = -2_147_483_648
-    POSITION_MAXIMUM   = +2_147_483_647
-    DIFFERENCE_MINIMUM = -2_147_483_648
-    DIFFERENCE_MAXIMUM = +2_147_483_647
+    POSITION_MINIMUM = -2_147_483_648
+    POSITION_MAXIMUM = +2_147_483_647
+    DISTANCE_MINIMUM = -2_147_483_648
+    DISTANCE_MAXIMUM = +2_147_483_647
 
     MICROSTEP_RESOLUTIONS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
 
@@ -440,20 +440,20 @@ class Motor(abc.ABC) :
         if wait_while_moving :
             self.wait_while_moving()
 
-    def move_by(self, difference : int, wait_while_moving : bool = True) -> None :
+    def move_by(self, distance : int, wait_while_moving : bool = True) -> None :
         """
-        Moves the motor by the given difference in units of microsteps.
+        Moves the motor by the given distance in units of microsteps.
 
-        Positive differences move the motor in right direction.
-        Negative differences move the motor in left direction.
+        A positive distance moves the motor in right direction.
+        A negative distance moves the motor in left direction.
 
-        Values: [`DIFFERENCE_MINIMUM`, `DIFFERENCE_MAXIMUM`]
+        Values: [`DISTANCE_MINIMUM`, `DISTANCE_MAXIMUM`]
 
-        Note: The position of the motor will overflow if the sum of the position and the difference
+        Note: The position of the motor will overflow if the sum of the position and the distance
         exceeds the limits of the position of `POSITION_MINIMUM` or `POSITION_MAXIMUM`.
         """
         self._move_indicate(Motor._RampMode.POSITION)
-        self.__module._motor_move_by(self.__number, difference)
+        self.__module._motor_move_by(self.__number, distance)
         if wait_while_moving :
             self.wait_while_moving()
 
@@ -478,9 +478,9 @@ class Motor(abc.ABC) :
             raise ValueError('Position invalid.')
 
     @staticmethod
-    def _difference_verify(value : int) -> None :
-        if value < Motor.DIFFERENCE_MINIMUM or value > Motor.DIFFERENCE_MAXIMUM :
-            raise ValueError('Difference invalid.')
+    def _distance_verify(value : int) -> None :
+        if value < Motor.DISTANCE_MINIMUM or value > Motor.DISTANCE_MAXIMUM :
+            raise ValueError('Distance invalid.')
 
     def __init__(self, module : Module, number : int) -> None :
         self.__module = module
