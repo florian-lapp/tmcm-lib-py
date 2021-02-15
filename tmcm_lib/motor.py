@@ -8,6 +8,7 @@ import enum
 import time
 
 class Motor(abc.ABC) :
+    """Motor of a module."""
 
     POSITION_MINIMUM = -2_147_483_648
     POSITION_MAXIMUM = +2_147_483_647
@@ -288,7 +289,7 @@ class Motor(abc.ABC) :
         Note: The microstep resolution can not be set while the motor is moving.
         """
         try :
-            value_internal = Motor.__MicrostepResolution[value]
+            value_internal = Motor.__MICROSTEP_RESOLUTION[value]
         except KeyError :
             raise ValueError('Microstep resolution invalid.')
         else :
@@ -530,7 +531,9 @@ class Motor(abc.ABC) :
 
     @abc.abstractmethod
     def _velocity_external(self, value : int) -> float :
-        """Converts a velocity of the motor from internal units in units of fullsteps per second."""
+        """
+        Converts a velocity of the motor from internal units into units of fullsteps per second.
+        """
         pass
 
     @abc.abstractmethod
@@ -554,7 +557,8 @@ class Motor(abc.ABC) :
     @abc.abstractmethod
     def _acceleration_external(self, value : int) -> float :
         """
-        Converts an acceleration of the motor from internal units in units of fullsteps per second.
+        Converts an acceleration of the motor from internal units into units of fullsteps per
+        second.
         """
         pass
 
@@ -794,7 +798,7 @@ class Motor(abc.ABC) :
         SWITCH_LIMIT_LEFT_ACTIVE    = 11,
         SWITCH_HOME_ACTIVE          = 9
 
-    __MicrostepResolution : dict[int, int] = {
+    __MICROSTEP_RESOLUTION = {
           1 : 0,
           2 : 1,
           4 : 2,

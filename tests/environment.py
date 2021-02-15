@@ -12,7 +12,7 @@ class __Environment :
     # Millivolts.
     SUPPLY_VOLTAGE_TOLERANCE = 1000
 
-    MOTORS = (0, 1)
+    MOTOR_NUMBERS = (0, 1)
     # Milliamperes.
     MOTOR_CURRENT_MOVING = 173
     # Milliamperes.
@@ -54,7 +54,7 @@ class __Environment :
         motors = module.motors
         self.__port = port
         self.__module = module
-        self.__motors = tuple(motors[number] for number in self.MOTORS)
+        self.__motors = tuple(motors[number] for number in self.MOTOR_NUMBERS)
         self.reset()
 
 instance = __Environment()

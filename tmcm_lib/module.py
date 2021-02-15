@@ -9,9 +9,10 @@ if typing.TYPE_CHECKING :
     from .motor import Motor
 
 class Module(abc.ABC) :
+    """Generic module."""
 
     @classmethod
-    def identify(cls, port : Port) -> (int, (int, int)) :
+    def identify(cls, port : Port) -> typing.Tuple[int, typing.Tuple[int, int]] :
         """Gets the identity and the firmware version of the module connected to the given port."""
         return cls.__firmware_version_get(port)
 
@@ -36,11 +37,15 @@ class Module(abc.ABC) :
 
     @property
     def identity(self) -> int :
-        """Gets the identity of the module."""
+        """
+        Gets the identity of the module.
+
+        Example: 3110 for TMCM-3110.
+        """
         return self.__identity
 
     @property
-    def firmware_version(self) -> (int, int) :
+    def firmware_version(self) -> typing.Tuple[int, int] :
         """Gets the firmware version of the module as major version and minor version."""
         return self.__firmware_version
 
@@ -104,7 +109,7 @@ class Module(abc.ABC) :
         return self.__motor_frequency_maximum
 
     @property
-    def motors(self) -> ('Motor', ...) :
+    def motors(self) -> typing.Tuple['Motor', ...] :
         """Gets the motors of the module."""
         return self.__motors
 
@@ -125,9 +130,9 @@ class Module(abc.ABC) :
             """Gets the count of the coordinates."""
             return self.__count
 
-        def __getitem__(self, number : int) -> (int, ...) :
+        def __getitem__(self, number : int) -> typing.Tuple[int, ...] :
             """
-            Gets the positions of a coordinate.
+            Gets the position of a coordinate.
 
             Number values: [0, len(self))
 
@@ -139,9 +144,9 @@ class Module(abc.ABC) :
                 for motor_number in range(self.__motor_count)
             )
 
-        def __setitem__(self, number : int, positions : typing.Iterable[int]) -> None :
+        def __setitem__(self, number : int, position : typing.Iterable[int]) -> None :
             """
-            Sets the positions of a coordinate.
+            Sets the position of a coordinate.
 
             Number values: [0, len(self))
 
@@ -149,9 +154,9 @@ class Module(abc.ABC) :
             """
             self._number_verify(number)
             from .motor import Motor
-            for position in positions :
+            for position in position :
                 Motor._position_verify(position)
-            for (motor_number, position) in zip(range(self.__motor_count), positions) :
+            for (motor_number, position) in zip(range(self.__motor_count), position) :
                 self._set(number, motor_number, position)
 
         def _number_verify(self, value : int) -> None :
@@ -192,7 +197,7 @@ class Module(abc.ABC) :
     ) -> None :
         identity_, firmware_version = self.__firmware_version_get(port)
         if identity_ != identity :
-            raise ExceptionModuleIdentity()
+            raise ExceptionIdentity()
         self.__port = port
         self.__identity = identity_
         self.__firmware_version = firmware_version
@@ -409,7 +414,7 @@ class Module(abc.ABC) :
         return sum(data) & 0xFF
 
     @classmethod
-    def __command_request_transfer_port(
+    def __command_request_transmit_port(
         cls,
         port : Port,
         command_number : int,
@@ -434,16 +439,16 @@ class Module(abc.ABC) :
         #     bank_number,
         #     value
         # )
-        port.transfer(bytes(data))
+        port.transmit(bytes(data))
 
-    def __command_request_transfer(
+    def __command_request_transmit(
         self,
         command_number : int,
         type_number : int = 0,
         bank_number : int = 0,
         value : int = 0
     ) -> None :
-        Module.__command_request_transfer_port(
+        Module.__command_request_transmit_port(
             self.__port,
             command_number,
             type_number,
@@ -483,7 +488,7 @@ class Module(abc.ABC) :
         bank_number : int = 0,
         value : int = 0
     ) -> int :
-        cls.__command_request_transfer_port(
+        cls.__command_request_transmit_port(
             port,
             command_number,
             type_number,
@@ -503,10 +508,10 @@ class Module(abc.ABC) :
 
     def __command_transceive(
         self,
-        command_number: int,
-        type_number: int = 0,
-        bank_number: int = 0,
-        value: int = 0
+        command_number : int,
+        type_number : int = 0,
+        bank_number : int = 0,
+        value : int = 0
     ) -> int :
         return Module.__command_transceive_port(
             self.__port,
@@ -517,7 +522,7 @@ class Module(abc.ABC) :
         )
 
     @classmethod
-    def __firmware_version_get(cls, port : Port) -> (int, (int, int)) :
+    def __firmware_version_get(cls, port : Port) -> typing.Tuple[int, typing.Tuple[int, int]] :
         value = cls.__command_transceive_port(
             port,
             Module.__Command.CTL_FIRMWARE_VERSION_GET,
@@ -526,10 +531,10 @@ class Module(abc.ABC) :
         identity      = (value >> 16) & 0xFFFF
         version_major = (value >>  8) & 0xFF
         version_minor = (value      ) & 0xFF
-        return (identity, (version_major, version_minor))
+        return identity, (version_major, version_minor)
 
     def __factory_settings_restore(self) -> None :
-        self.__command_request_transfer(
+        self.__command_request_transmit(
             Module.__Command.CTL_FACTORY_SETTINGS_RESTORE,
             0,
             0,

@@ -26,7 +26,7 @@ class Module(ModuleGeneric) :
     COORDINATE_COUNT = 20
 
     def __init__(self, port : Port) -> None :
-        """Creates a module connected to the given port."""
+        """Constructs a module connected to the given port."""
         super().__init__(
             port,
             Module.IDENTITY,

@@ -5,3 +5,5 @@ from .motor_union import MotorUnion
 from .switch import Switch
 from .direction import Direction
 from .exceptions import *
+
+from .tmcm_3110.module import Module as Module_TMCM_3110

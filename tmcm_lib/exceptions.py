@@ -12,18 +12,15 @@ class ExceptionInternal(Exception) :
     """
     pass
 
-class ExceptionModuleIdentity(Exception) :
-    """
-    Exception that indicates that the identity of a module is wrong.
-    """
+class ExceptionIdentity(Exception) :
+    """Exception that indicates that an identity is wrong."""
 
 class ExceptionChecksum(Exception, abc.ABC) :
     """
-    Exception that indicates that the checksum of a request or a reply is
-    wrong.
+    Exception that indicates that the checksum of a request or a reply is wrong.
 
-    The reason for this exception is an unstable communication from the
-    host to the module or from the module to the host.
+    The reason for this exception is an unstable communication from the host to the module or from
+    the module to the host.
     """
     pass
 
@@ -31,8 +28,7 @@ class ExceptionChecksumRequest(ExceptionChecksum) :
     """
     Exception that indicates that the checksum of a request is wrong.
 
-    The reason for this exception is an unstable communication from the host to
-    the module.
+    The reason for this exception is an unstable communication from the host to the module.
     """
     pass
 
@@ -40,8 +36,7 @@ class ExceptionChecksumReply(Exception) :
     """
     Exception that indicates that the checksum of a reply is wrong.
 
-    The reason for this exception is an unstable communication from the module
-    to the host.
+    The reason for this exception is an unstable communication from the module to the host.
     """
     pass
 

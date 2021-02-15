@@ -115,6 +115,9 @@ class TestMotor(unittest.TestCase) :
     @subtest_motor
     def test_position(self, motor : Motor) :
         self.assertEqual(motor.position, 0)
+        position = 100 * motor.number
+        motor.position = position
+        self.assertEqual(motor.position, position)
 
     @subtest_motor
     def test_velocity(self, motor : Motor) :
@@ -127,6 +130,15 @@ class TestMotor(unittest.TestCase) :
     @subtest_motor
     def test_moving(self, motor : Motor) :
         self.assertFalse(motor.moving)
+
+    @subtest_motor
+    def test_move_to_right(self, motor : Motor) :
+        position_target = +environment.MOTOR_STEPS * motor.microstep_resolution
+        motor.move_to(position_target)
+        self.assertFalse(motor.moving)
+        self.assertEqual(motor.position, position_target)
+        self.assertEqual(motor.velocity, (0.0, Direction.NONE))
+        self.assertEqual(motor.acceleration, 0.0)
 
     @subtest_motor
     def test_move_to_right_no_wait(self, motor : Motor) :
@@ -151,6 +163,15 @@ class TestMotor(unittest.TestCase) :
                 self.assertEqual(velocity_direction, Direction.LEFT)
             else :
                 self.assertEqual(velocity_direction, Direction.RIGHT)
+        self.assertFalse(motor.moving)
+        self.assertEqual(motor.position, position_target)
+        self.assertEqual(motor.velocity, (0.0, Direction.NONE))
+        self.assertEqual(motor.acceleration, 0.0)
+
+    @subtest_motor
+    def test_move_to_left(self, motor : Motor) :
+        position_target = -environment.MOTOR_STEPS * motor.microstep_resolution
+        motor.move_to(position_target)
         self.assertFalse(motor.moving)
         self.assertEqual(motor.position, position_target)
         self.assertEqual(motor.velocity, (0.0, Direction.NONE))

@@ -30,7 +30,9 @@ class Motor(MotorGeneric) :
 
     # Overrides.
     def _velocity_external(self, value : int) -> float :
-        """Converts a velocity of the motor from internal units in units of fullsteps per second."""
+        """
+        Converts a velocity of the motor from internal units into units of fullsteps per second.
+        """
         return Motor.__velocity_external(
             self._pulse_divisor_exponent_get(),
             value,
@@ -47,13 +49,13 @@ class Motor(MotorGeneric) :
         microstep_resolution = self.microstep_resolution
         minimum = Motor.__acceleration_external(
             pulse_divisor_exponent,
-            Motor.__RAMP_DIVISOR_EXPONENT_MAXIMUM,
+            min(Motor.__RAMP_DIVISOR_EXPONENT_MAXIMUM, pulse_divisor_exponent + 1),
             1,
             microstep_resolution
         )
         maximum = Motor.__acceleration_external(
             pulse_divisor_exponent,
-            0,
+            max(0, pulse_divisor_exponent - 1),
             Motor.__ACCELERATION_PORTIONS - 1,
             microstep_resolution
         )
@@ -83,7 +85,8 @@ class Motor(MotorGeneric) :
     # Overrides.
     def _acceleration_external(self, value : int) -> float :
         """
-        Converts an acceleration of the motor from internal units in units of fullsteps per second.
+        Converts an acceleration of the motor from internal units into units of fullsteps per
+        second.
         """
         return Motor.__acceleration_external(
             self._pulse_divisor_exponent_get(),
@@ -149,7 +152,7 @@ class Motor(MotorGeneric) :
     def __acceleration_external(
         cls,
         pulse_divisor_exponent : int,
-        ramp_divisor_exponent: int,
+        ramp_divisor_exponent : int,
         portion : int,
         microstep_resolution : int
     ) -> float :

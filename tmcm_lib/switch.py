@@ -5,6 +5,7 @@ if typing.TYPE_CHECKING :
     from .motor import Motor
 
 class Switch :
+    """Switch of a motor."""
 
     class Type(enum.IntEnum) :
         """Type of a switch."""
@@ -17,14 +18,14 @@ class Switch :
         HOME        = 2
 
     def __init__(self, motor : 'Motor', type : Type) :
+        """Creates a switch for the given motor and type."""
         self.__motor = motor
         self.__type = type
         functions = Switch.__FUNCTIONS[type]
-        from .motor import Motor
-        self.__disabled_set = getattr(Motor, functions['disabled_set'], None)
-        self.__disabled_get = getattr(Motor, functions['disabled_get'], None)
-        self.__active_get = getattr(Motor, functions['active_get'])
-        self.__enabled = not self.__disabled_get(motor) if self.__disabled_get else True
+        self.__disabled_set = getattr(motor, functions['disabled_set'], None)
+        self.__disabled_get = getattr(motor, functions['disabled_get'], None)
+        self.__active_get = getattr(motor, functions['active_get'])
+        self.__enabled = not self.__disabled_get() if self.__disabled_get else True
 
     @property
     def motor(self) -> 'Motor' :
@@ -54,13 +55,13 @@ class Switch :
         """
         if not self.__disabled_set :
             return
-        self.__disabled_set(self.__motor, not state)
+        self.__disabled_set(not state)
         self.__enabled = state
 
     @property
     def active(self) -> bool :
         """Gets if the switch is active."""
-        return self.__active_get(self.__motor)
+        return self.__active_get()
 
     __FUNCTIONS = {
         # Type.LIMIT_RIGHT
