@@ -10,15 +10,15 @@ class Switch :
     class Type(enum.IntEnum) :
         """Type of a switch."""
 
-        # Right limit switch.
         LIMIT_RIGHT = 0,
-        # Left limit switch.
+        """Right limit switch."""
         LIMIT_LEFT  = 1,
-        # Home switch.
+        """Left limit switch."""
         HOME        = 2
+        """Home switch."""
 
     def __init__(self, motor : 'Motor', type : Type) :
-        """Creates a switch for the given motor and type."""
+        """Creates a switch for the given motor of the given type."""
         self.__motor = motor
         self.__type = type
         functions = Switch.__FUNCTIONS[type]
@@ -64,20 +64,17 @@ class Switch :
         return self.__active_get()
 
     __FUNCTIONS = {
-        # Type.LIMIT_RIGHT
-        0 : {
+        Type.LIMIT_RIGHT : {
             'disabled_set' : '_switch_limit_right_disabled_set',
             'disabled_get' : '_switch_limit_right_disabled_get',
             'active_get'   : '_switch_limit_right_active_get'
         },
-        # Type.LIMIT_LEFT
-        1 : {
+        Type.LIMIT_LEFT : {
             'disabled_set' : '_switch_limit_left_disabled_set',
             'disabled_get' : '_switch_limit_left_disabled_get',
             'active_get'   : '_switch_limit_left_active_get'
         },
-        # Type.HOME (Can not be disabled)
-        2 : {
+        Type.HOME : {
             # Nonexistent.
             'disabled_set' : '_switch_home_disabled_set',
             # Nonexistent.

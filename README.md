@@ -37,6 +37,15 @@ motor.switch_limit_left.enabled = True
 motor.switch_limit_right.enabled = True
 ```
 
+### Identifying
+
+``` python
+# Prints the identity of the module (e.g. "3110" for TMCM-3110).
+print(module.identity)
+# Prints the firmware version of the module (e.g. "(1, 14)" for version 1.14).
+print(module.firmware_version)
+```
+
 ### Moving (Blocking)
 
 Blocking moving waits while the motor is moving.
@@ -63,10 +72,10 @@ motor.wait_while_moving()
 motor.move_to(0, False)
 # Waits while the motor is moving.
 while motor.moving :
-    # ...
+    ...
 # Starts moving the motor in right direction until stopped (by a limit switch or stop).
 motor.move_right(False)
-# ...
+...
 # Stops the motor.
 motor.stop()
 ```
@@ -80,7 +89,7 @@ Motors can move synchronously (i.e. they stop at the same time) or asynchronousl
 from tmcl_lib import MotorUnion
 
 # Constructs a motor union of the first and second motor of the module.
-motor_union = MotorUnion(module, {0, 1})
+motor_union = MotorUnion(module, [0, 1])
 
 # Moves the motor union synchronously absolutely to the given position in units of microsteps
 # (i.e. first motor to first component; second motor to second component).

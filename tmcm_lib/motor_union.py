@@ -1,6 +1,5 @@
 from .module import Module
 from .motor import Motor
-from .direction import Direction
 from .exceptions import *
 
 import functools
@@ -20,8 +19,8 @@ class MotorUnion :
         """
         Constructs a motor union of motors of the given module and motor numbers.
 
-        The coordinate number specifies the coordinate to temporarily store the position to move
-        the motors to.
+        The coordinate number specifies the coordinate to temporarily store the position to move the
+        motors to.
         """
         self.__module = module
         self.__motors = tuple(module.motors[motor_number] for motor_number in motor_numbers)
@@ -38,38 +37,38 @@ class MotorUnion :
         return self.__module
 
     @property
-    def motors(self) -> typing.Tuple[Motor, ...] :
+    def motors(self) -> typing.Sequence[Motor] :
         """Gets the motors of the motor union."""
         return self.__motors
 
     @property
-    def velocities(self) -> typing.Tuple[typing.Tuple[float, Direction], ...] :
-        """
-        Gets the magnitude and the direction of the velocities of the motor union in units of
-        fullsteps per second.
-        """
+    def velocity(self) -> typing.Sequence[float] :
+        """Gets the velocity of the motor union as a vector in units of fullsteps per second."""
         return tuple(motor.velocity for motor in self.__motors)
 
     @property
-    def accelerations(self) -> typing.Tuple[float, ...] :
-        """Gets the accelerations of the motor union in units of fullsteps per square second."""
+    def acceleration(self) -> typing.Sequence[float] :
+        """
+        Gets the acceleration of the motor union as a vector in units of fullsteps per square
+        second.
+        """
         return tuple(motor.acceleration for motor in self.__motors)
 
     @property
-    def position(self) -> typing.Tuple[int, ...] :
-        """Gets the position of the motor union in units of microsteps."""
+    def position(self) -> typing.Sequence[int] :
+        """Gets the position of the motor union as a vector in units of microsteps."""
         return tuple(motor.position for motor in self.__motors)
 
     @position.setter
     def position(self, position : typing.Iterable[int]) -> None :
         """
-        Sets the position of the motor union in units of microsteps.
+        Sets the position of the motor union as a vector in units of microsteps.
 
         Note: The position can not be set while any motor of the motor union is moving.
         """
         if self.moving :
-            raise ExceptionState()
-        for (motor, position) in zip(self.__motors, position) :
+            raise StateException()
+        for motor, position in zip(self.__motors, position) :
             motor.position = position
 
     @property
@@ -85,8 +84,8 @@ class MotorUnion :
         synchronously : bool = True
     ) -> None :
         """
-        Moves the motor union synchronously or asynchronously to the given position in units of
-        microsteps.
+        Moves the motor union synchronously or asynchronously to the given position as a vector in
+        units of microsteps.
         """
         self.__coordinate_set(position)
         for motor in self.__motors :
@@ -118,5 +117,5 @@ class MotorUnion :
 
     def __coordinate_set(self, position : typing.Iterable[int]) -> None :
         """Sets the position of the coordinate in units of microsteps."""
-        for (motor, position) in zip(self.__motors, position) :
+        for motor, position in zip(self.__motors, position) :
             motor.coordinates[self.__coordinate_number] = position

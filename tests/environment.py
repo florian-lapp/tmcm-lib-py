@@ -12,7 +12,7 @@ class __Environment :
     # Millivolts.
     SUPPLY_VOLTAGE_TOLERANCE = 1000
 
-    MOTOR_NUMBERS = (0, 1)
+    MOTOR_NUMBERS = (0, 1, 2)
     # Milliamperes.
     MOTOR_CURRENT_MOVING = 173
     # Milliamperes.
@@ -35,7 +35,7 @@ class __Environment :
         return self.__module
 
     @property
-    def motors(self) -> typing.Tuple[Motor, ...] :
+    def motors(self) -> typing.Sequence[Motor] :
         return self.__motors
 
     def reset(self) -> None :
@@ -43,6 +43,7 @@ class __Environment :
             motor.stop()
             motor.current_moving = self.MOTOR_CURRENT_MOVING
             motor.current_standby = self.MOTOR_CURRENT_STANDBY
+            motor.direction_reversed = False
             motor.microstep_resolution = self.MOTOR_MICROSTEP_RESOLUTION
             motor.velocity_moving = self.MOTOR_VELOCITY_MOVING
             motor.acceleration_moving = self.MOTOR_ACCELERATION_MOVING

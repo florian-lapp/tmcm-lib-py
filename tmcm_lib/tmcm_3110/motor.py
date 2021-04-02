@@ -1,6 +1,7 @@
 from tmcm_lib.motor import Motor as MotorGeneric
 
 import math
+import typing
 
 class Motor(MotorGeneric) :
 
@@ -21,7 +22,7 @@ class Motor(MotorGeneric) :
             pulse_divisor_exponent = 0
             portion = 0
         else :
-            (pulse_divisor_exponent, portion) = Motor.__velocity_internal(
+            pulse_divisor_exponent, portion = Motor.__velocity_internal(
                 value,
                 self.microstep_resolution
             )
@@ -40,7 +41,7 @@ class Motor(MotorGeneric) :
         )
 
     # Overrides.
-    def _acceleration_extrema_get_external(self) -> (float, float) :
+    def _acceleration_extrema_get_external(self) -> typing.Tuple[float, float] :
         """
         Gets the minimum and maximum moving acceleration of the motor in units of fullsteps per
         square second.
@@ -59,7 +60,7 @@ class Motor(MotorGeneric) :
             Motor.__ACCELERATION_PORTIONS - 1,
             microstep_resolution
         )
-        return (minimum, maximum)
+        return minimum, maximum
 
     # Overrides.
     def _acceleration_moving_set_external(self, value : float) -> int :
@@ -74,7 +75,7 @@ class Motor(MotorGeneric) :
             portion = 0
         else :
             pulse_divisor_exponent = self._pulse_divisor_exponent_get()
-            (ramp_divisor_exponent, portion) = Motor.__acceleration_internal(
+            ramp_divisor_exponent, portion = Motor.__acceleration_internal(
                 pulse_divisor_exponent,
                 value,
                 self.microstep_resolution
@@ -130,7 +131,7 @@ class Motor(MotorGeneric) :
         cls,
         value : float,
         microstep_resolution : int
-    ) -> (int, int) :
+    ) -> typing.Tuple[int, int] :
         """
         Converts a velocity of a motor from units of fullsteps per second into a pulse divisor
         exponent and a portion of `__VELOCITY_PORTIONS`.
@@ -146,7 +147,7 @@ class Motor(MotorGeneric) :
             microstep_resolution
         )
         portion = int((cls.__VELOCITY_PORTIONS - 1) * value / maximum)
-        return (pulse_divisor_exponent, portion)
+        return pulse_divisor_exponent, portion
 
     @classmethod
     def __acceleration_external(
@@ -175,7 +176,7 @@ class Motor(MotorGeneric) :
         pulse_divisor_exponent : int,
         value : float,
         microstep_resolution : int
-    ) -> (int, int) :
+    ) -> typing.Tuple[int, int] :
         """
         Converts an acceleration of a motor from units of fullsteps per square second into a ramp
         divisor exponent and a portion of `__ACCELERATION_PORTIONS`.
@@ -184,8 +185,13 @@ class Motor(MotorGeneric) :
             microstep_resolution * value
         )
         ramp_divisor_exponent = min(
+            pulse_divisor_exponent + 1,
             cls.__RAMP_DIVISOR_EXPONENT_MAXIMUM,
-            max(0, int(math.log(ramp_divisor, cls.__DIVISOR_BASE)) - pulse_divisor_exponent)
+            max(
+                pulse_divisor_exponent - 1,
+                0,
+                int(math.log(ramp_divisor, cls.__DIVISOR_BASE)) - pulse_divisor_exponent
+            )
         )
         maximum = cls.__acceleration_external(
             pulse_divisor_exponent,
@@ -194,7 +200,7 @@ class Motor(MotorGeneric) :
             microstep_resolution
         )
         portion = int((cls.__ACCELERATION_PORTIONS - 1) * value / maximum)
-        return (ramp_divisor_exponent, portion)
+        return ramp_divisor_exponent, portion
 
     @classmethod
     def _initialize(cls) -> None :

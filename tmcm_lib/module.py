@@ -3,6 +3,7 @@ from .exceptions import *
 
 import abc
 import enum
+import importlib
 import typing
 
 if typing.TYPE_CHECKING :
@@ -11,22 +12,33 @@ if typing.TYPE_CHECKING :
 class Module(abc.ABC) :
     """Generic module."""
 
+    IDENTITY_IGNORE = 0
+    """Ignore identity."""
+
     @classmethod
     def identify(cls, port : Port) -> typing.Tuple[int, typing.Tuple[int, int]] :
         """Gets the identity and the firmware version of the module connected to the given port."""
         return cls.__firmware_version_get(port)
 
     @classmethod
-    def construct(cls, port : Port) -> 'Module' :
+    def construct(cls, port : Port, identity : int = IDENTITY_IGNORE) -> 'Module' :
         """
         Constructs a module of the class identified by the module connected to the given port.
 
-        Raises an NotImplementedError if the connected module is not implemented.
+        The identity specifies the expected identity of the module.
+
+        Raises `IdentityException` if the identity is given and is not equal to the identity of
+        the module connected to the given port.
+
+        Raises `NotImplementedError` if the connected module is not implemented.
         """
-        identity, _ = cls.identify(port)
-        import importlib
+        identity_port, _ = cls.identify(port)
+        if identity != cls.IDENTITY_IGNORE and identity != identity_port :
+            raise IdentityException()
         try :
-            module = importlib.import_module('.' + cls.__MODULE_NAME.format(identity), __package__)
+            module = importlib.import_module(
+                '.' + cls.__MODULE_NAME.format(identity_port), __package__
+            )
         except ImportError :
             pass
         else :
@@ -60,8 +72,8 @@ class Module(abc.ABC) :
         Gets the activity of the limit switches of the module.
 
         Values:
-            | True  : Active high
-            | False : Active low
+            | `True`  : Active high
+            | `False` : Active low
         """
         return self.__switch_limit_activity
 
@@ -71,8 +83,8 @@ class Module(abc.ABC) :
         Sets the activity of the limit switches of the module.
 
         Values:
-            | True  : Active high
-            | False : Active low
+            | `True`  : Active high
+            | `False` : Active low
         """
         if activity == self.__switch_limit_activity :
             return
@@ -109,7 +121,7 @@ class Module(abc.ABC) :
         return self.__motor_frequency_maximum
 
     @property
-    def motors(self) -> typing.Tuple['Motor', ...] :
+    def motors(self) -> typing.Sequence['Motor'] :
         """Gets the motors of the module."""
         return self.__motors
 
@@ -130,7 +142,7 @@ class Module(abc.ABC) :
             """Gets the count of the coordinates."""
             return self.__count
 
-        def __getitem__(self, number : int) -> typing.Tuple[int, ...] :
+        def __getitem__(self, number : int) -> typing.Sequence[int] :
             """
             Gets the position of a coordinate.
 
@@ -156,7 +168,7 @@ class Module(abc.ABC) :
             from .motor import Motor
             for position in position :
                 Motor._position_verify(position)
-            for (motor_number, position) in zip(range(self.__motor_count), position) :
+            for motor_number, position in zip(range(self.__motor_count), position) :
                 self._set(number, motor_number, position)
 
         def _number_verify(self, value : int) -> None :
@@ -195,12 +207,12 @@ class Module(abc.ABC) :
         motor_class : typing.Type['Motor'],
         coordinate_count : int
     ) -> None :
-        identity_, firmware_version = self.__firmware_version_get(port)
-        if identity_ != identity :
-            raise ExceptionIdentity()
+        identity_port, firmware_version_port = self.__firmware_version_get(port)
+        if identity_port != identity :
+            raise IdentityException()
         self.__port = port
-        self.__identity = identity_
-        self.__firmware_version = firmware_version
+        self.__identity = identity_port
+        self.__firmware_version = firmware_version_port
         self.__motor_current_minimum = motor_current_maximum // Module._MOTOR_CURRENT_STEP_COUNT
         self.__motor_current_maximum = motor_current_maximum
         self.__motor_frequency_minimum = motor_frequency_minimum
@@ -219,11 +231,8 @@ class Module(abc.ABC) :
 
         Values: [`motor_current_minimum`, `motor_current_maximum`]
         """
-        if (
-            value < self.__motor_current_minimum or
-            value > self.__motor_current_maximum
-        ) :
-            raise ValueError('Current invalid.')
+        if value < self.__motor_current_minimum or value > self.__motor_current_maximum :
+            raise ValueError('Current invalid: Value exceeds limit.')
         return (
             (
                 value * Module._MOTOR_CURRENT_PORTIONS +
@@ -469,11 +478,11 @@ class Module(abc.ABC) :
         value = int.from_bytes(data[4 : 8], byteorder = cls.__COMMAND_BYTE_ORDER, signed = True)
         checksum = data[8]
         if checksum != cls.__command_checksum_calculate(data[0 : 8]) :
-            raise ExceptionChecksumReply()
+            raise ChecksumReplyException()
         if status == cls.__Status.CHECKSUM_WRONG :
-            raise ExceptionChecksumRequest()
+            raise ChecksumRequestException()
         if status != cls.__Status.SUCCESS :
-            raise ExceptionInternal()
+            raise InternalException()
         return value
 
     def __command_reply_receive(self) -> int :

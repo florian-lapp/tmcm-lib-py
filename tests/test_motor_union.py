@@ -1,6 +1,5 @@
 from tests.environment import instance as environment
 from tmcm_lib import MotorUnion
-from tmcm_lib import Direction
 
 import unittest
 
@@ -23,15 +22,15 @@ class TestMotor(unittest.TestCase) :
         self.__motor_union.position = position
         self.assertEqual(self.__motor_union.position, position)
 
-    def test_velocities(self) :
+    def test_velocity(self) :
         self.assertEqual(
-            self.__motor_union.velocities,
-            tuple((0.0, Direction.NONE) for _ in self.__motor_union.motors)
+            self.__motor_union.velocity,
+            tuple(0.0 for _ in self.__motor_union.motors)
         )
 
-    def test_accelerations(self) :
+    def test_acceleration(self) :
         self.assertEqual(
-            self.__motor_union.accelerations,
+            self.__motor_union.acceleration,
             tuple(0.0 for _ in self.__motor_union.motors)
         )
 
@@ -47,11 +46,11 @@ class TestMotor(unittest.TestCase) :
         self.assertFalse(self.__motor_union.moving)
         self.assertEqual(self.__motor_union.position, position_target)
         self.assertEqual(
-            self.__motor_union.velocities,
-            tuple((0.0, Direction.NONE) for _ in self.__motor_union.motors)
+            self.__motor_union.velocity,
+            tuple(0.0 for _ in self.__motor_union.motors)
         )
         self.assertEqual(
-            self.__motor_union.accelerations,
+            self.__motor_union.acceleration,
             tuple(0.0 for _ in self.__motor_union.motors)
         )
 
@@ -66,37 +65,32 @@ class TestMotor(unittest.TestCase) :
         moving = True
         while moving :
             position = self.__motor_union.position
-            velocities = self.__motor_union.velocities
-            for (position_before, position, velocity, overshoot) in zip(
-                position_before,
-                position,
-                velocities,
-                overshoots
+            velocity = self.__motor_union.velocity
+            for position_before_scalar, position_scalar, velocity_scalar, overshoot in zip(
+                position_before, position, velocity, overshoots
             ) :
                 if overshoot :
-                    self.assertLessEqual(position, position_before)
+                    self.assertLessEqual(position_scalar, position_before_scalar)
                 else :
-                    self.assertGreaterEqual(position, position_before)
-                position_before = position
-                (velocity_magnitude, velocity_direction) = velocity
+                    self.assertGreaterEqual(position_scalar, position_before_scalar)
                 if not self.__motor_union.moving :
                     moving = False
                     break
-                self.assertGreater(velocity_magnitude, 0.0)
-                if overshoot is False and velocity_direction == Direction.LEFT :
+                if overshoot is False and velocity_scalar < 0.0 :
                     overshoot = True
                 if overshoot :
-                    self.assertEqual(velocity_direction, Direction.LEFT)
+                    self.assertLess(velocity_scalar, 0.0)
                 else :
-                    self.assertEqual(velocity_direction, Direction.RIGHT)
+                    self.assertGreater(velocity_scalar, 0.0)
+            position_before = position
         self.assertFalse(self.__motor_union.moving)
         self.assertEqual(self.__motor_union.position, position_target)
         self.assertEqual(
-            self.__motor_union.velocities,
-            tuple((0.0, Direction.NONE) for _ in self.__motor_union.motors)
+            self.__motor_union.velocity,
+            tuple(0.0 for _ in self.__motor_union.motors)
         )
         self.assertEqual(
-            self.__motor_union.accelerations,
+            self.__motor_union.acceleration,
             tuple(0.0 for _ in self.__motor_union.motors)
         )
 
@@ -109,11 +103,11 @@ class TestMotor(unittest.TestCase) :
         self.assertFalse(self.__motor_union.moving)
         self.assertEqual(self.__motor_union.position, position_target)
         self.assertEqual(
-            self.__motor_union.velocities,
-            tuple((0.0, Direction.NONE) for _ in self.__motor_union.motors)
+            self.__motor_union.velocity,
+            tuple(0.0 for _ in self.__motor_union.motors)
         )
         self.assertEqual(
-            self.__motor_union.accelerations,
+            self.__motor_union.acceleration,
             tuple(0.0 for _ in self.__motor_union.motors)
         )
 
@@ -128,37 +122,32 @@ class TestMotor(unittest.TestCase) :
         moving = True
         while moving :
             position = self.__motor_union.position
-            velocities = self.__motor_union.velocities
-            for (position_before, position, velocity, overshoot) in zip(
-                position_before,
-                position,
-                velocities,
-                overshoots
+            velocity = self.__motor_union.velocity
+            for position_before_scalar, position_scalar, velocity_scalar, overshoot in zip(
+                position_before, position, velocity, overshoots
             ) :
                 if overshoot :
-                    self.assertGreaterEqual(position, position_before)
+                    self.assertGreaterEqual(position_scalar, position_before_scalar)
                 else :
-                    self.assertLessEqual(position, position_before)
-                position_before = position
-                (velocity_magnitude, velocity_direction) = velocity
+                    self.assertLessEqual(position_scalar, position_before_scalar)
                 if not self.__motor_union.moving :
                     moving = False
                     break
-                self.assertGreater(velocity_magnitude, 0.0)
-                if overshoot is False and velocity_direction == Direction.RIGHT :
+                if overshoot is False and velocity_scalar > 0.0 :
                     overshoot = True
                 if overshoot :
-                    self.assertEqual(velocity_direction, Direction.RIGHT)
+                    self.assertGreater(velocity_scalar, 0.0)
                 else :
-                    self.assertEqual(velocity_direction, Direction.LEFT)
+                    self.assertLess(velocity_scalar, 0.0)
+            position_before = position
         self.assertFalse(self.__motor_union.moving)
         self.assertEqual(self.__motor_union.position, position_target)
         self.assertEqual(
-            self.__motor_union.velocities,
-            tuple((0.0, Direction.NONE) for _ in self.__motor_union.motors)
+            self.__motor_union.velocity,
+            tuple(0.0 for _ in self.__motor_union.motors)
         )
         self.assertEqual(
-            self.__motor_union.accelerations,
+            self.__motor_union.acceleration,
             tuple(0.0 for _ in self.__motor_union.motors)
         )
 

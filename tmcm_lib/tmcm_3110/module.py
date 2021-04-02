@@ -2,31 +2,33 @@ from tmcm_lib.port import Port
 from tmcm_lib.module import Module as ModuleGeneric
 from .motor import Motor
 
-import math
-
 class Module(ModuleGeneric) :
     """Module TMCM-3110."""
 
-    # Identity of the module.
     IDENTITY = 3110
-
-    # Motor count of the module.
+    """Identity of the module."""
     MOTOR_COUNT = 3
+    """Motor count of the module."""
 
-    # Maximum motor current (RMS) of the module in units of milliamperes.
-    # Determined with current steps in TMCL-IDE (Version 3.1.0.0).
     MOTOR_CURRENT_MAXIMUM = 2768
+    """Maximum motor current (RMS) of the module in units of milliamperes."""
+    # Determined with current steps in TMCL-IDE (Version 3.1.0.0).
 
-    # Minimum motor frequency of the module in units of hertz.
-    MOTOR_FREQUENCY_MINIMUM : float = Motor._FREQUENCY_MINIMUM
-    # Maximum motor frequency of the module in units of hertz.
-    MOTOR_FREQUENCY_MAXIMUM : float = Motor._FREQUENCY_MAXIMUM
+    MOTOR_FREQUENCY_MINIMUM = Motor._FREQUENCY_MINIMUM
+    """Minimum motor frequency of the module in units of hertz."""
+    MOTOR_FREQUENCY_MAXIMUM = Motor._FREQUENCY_MAXIMUM
+    """Maximum motor frequency of the module in units of hertz."""
 
-    # Coordinate count of the module.
     COORDINATE_COUNT = 20
+    """Coordinate count of the module."""
 
     def __init__(self, port : Port) -> None :
-        """Constructs a module connected to the given port."""
+        """
+        Constructs a module connected to the given port.
+
+        Raises `IdentityException` if the identity of the module connected to the given port is
+        not equal to `IDENTITY`.
+        """
         super().__init__(
             port,
             Module.IDENTITY,
