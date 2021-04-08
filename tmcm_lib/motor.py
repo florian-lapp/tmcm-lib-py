@@ -11,23 +11,28 @@ class Motor(abc.ABC) :
     """Motor of a module."""
 
     POSITION_MINIMUM = -2_147_483_648
+    """Minimum position a motor can move to."""
     POSITION_MAXIMUM = +2_147_483_647
+    """Maximum position a motor can move to."""
     DISTANCE_MINIMUM = -2_147_483_648
+    """Minimum distance a motor can move by."""
     DISTANCE_MAXIMUM = +2_147_483_647
+    """Maximum distance a motor can move by."""
 
     MICROSTEP_RESOLUTIONS = (1, 2, 4, 8, 16, 32, 64, 128, 256)
+    """Microstep resolutions a motor can have."""
 
     STANDBY_DELAY_MINIMUM = 10
-    """Minimum standby delay in units of milliseconds."""
+    """Minimum standby delay a motor can have in units of milliseconds."""
     STANDBY_DELAY_MAXIMUM = 10 * 65_535
-    """Maximum standby delay in units of milliseconds."""
+    """Maximum standby delay a motor can have in units of milliseconds."""
 
-    FREEWHEELING_DELAY_DISABLE = 0
-    """Freewheeling delay to disable freewheeling."""
+    FREEWHEELING_DELAY_DISABLED = 0
+    """Freewheeling delay of a motor with disabled freewheeling."""
     FREEWHEELING_DELAY_MINIMUM = 10
-    """Minimum freewheeling delay in units of milliseconds."""
+    """Minimum freewheeling delay a motor can have in units of milliseconds."""
     FREEWHEELING_DELAY_MAXIMUM = 10 * 65_535
-    """Maximum freewheeling delay in units of milliseconds."""
+    """Maximum freewheeling delay a motor can have in units of milliseconds."""
 
     MOVING_POLL_DELAY = 0.05
     """Delay between moving polls while waiting in units of seconds."""
@@ -48,7 +53,7 @@ class Motor(abc.ABC) :
 
     @property
     def switch_limit_right(self) -> Switch :
-        """Gets the left limit switch of the motor."""
+        """Gets the right limit switch of the motor."""
         return self.__switch_limit_right
 
     @property
@@ -64,20 +69,20 @@ class Motor(abc.ABC) :
     @property
     def direction_reversed(self) -> bool :
         """Gets if the direction of the motor is reversed."""
-        return self._direction < 0
+        return self.__direction_sign < 0
 
     @direction_reversed.setter
     def direction_reversed(self, direction_reversed : bool) -> None :
         """Sets if the direction of the motor is reversed."""
-        direction = -1 if direction_reversed else +1
-        if direction == self._direction :
+        direction_sign = -1 if direction_reversed else +1
+        if direction_sign == self.__direction_sign :
             return
         self.__switch_limit_right, self.__switch_limit_left = (
             self.__switch_limit_left, self.__switch_limit_right
         )
         self.__position *= -1
         self.__coordinates._revert()
-        self._direction = direction
+        self.__direction_sign = direction_sign
 
     @property
     def current_moving(self) -> int :
@@ -94,6 +99,9 @@ class Motor(abc.ABC) :
         Sets the moving current of the motor in units of milliamperes.
 
         Values: [`module.motor_current_minimum`, `module.motor_current_maximum`]
+
+        :raises ValueError:
+            Current invalid.
 
         Note: The value is rounded down to the next lower motor current step of the module.
         """
@@ -121,6 +129,9 @@ class Motor(abc.ABC) :
         Sets the standby current of the motor in units of milliamperes.
 
         Values: [`module.motor_current_minimum`, `module.motor_current_maximum`]
+
+        :raises ValueError:
+            Current invalid.
 
         Note: The value is rounded down to the next lower motor current step of the module.
         """
@@ -155,18 +166,23 @@ class Motor(abc.ABC) :
         """
         Sets the moving velocity of the motor in units of fullsteps per second.
 
+        The moving velocity can not be set while the motor is moving.
+
         Values: [`velocity_minimum`, `velocity_maximum`]
+
+        :raises StateException:
+            Motor is moving.
+        :raises ValueError:
+            Velocity invalid.
 
         Note: The value is rounded down to the next lower motor velocity step of the module.
 
-        Note: The moving velocity can not be set while the motor is moving.
-
         Note: Changing the moving velocity sometimes moves the motor by one microstep.
         """
-        if value < self.__velocity_minimum or value > self.__velocity_maximum :
-            raise ValueError('Velocity invalid: Value exceeds limit.')
         if self.moving :
             raise StateException()
+        if value < self.__velocity_minimum or value > self.__velocity_maximum :
+            raise ValueError('Velocity invalid: Value exceeds limit.')
         if value == self.__velocity_moving :
             return
         self.__velocity_moving_set_external(value)
@@ -202,24 +218,30 @@ class Motor(abc.ABC) :
         """
         Gets the moving acceleration of the motor in units of fullsteps per square second.
 
-        Values: [0, `acceleration_maximum`]
+        Values: [`acceleration_minimum`, `acceleration_maximum`]
         """
-        return self._direction * self.__acceleration_moving
+        return self.__direction_sign * self.__acceleration_moving
 
     @acceleration_moving.setter
     def acceleration_moving(self, value : float) -> None :
         """
         Sets the moving acceleration of the motor in units of of fullsteps per square second.
 
+        The moving acceleration can not be set while the motor is moving.
+
         Values: [`acceleration_minimum`, `acceleration_maximum`]
 
+        :raises StateException:
+            Motor is moving.
+        :raises ValueError:
+            Acceleration invalid.
+
         Note: The value is rounded down to the next lower motor acceleration step of the module.
-        Note: The moving acceleration can not be set while the motor is moving.
         """
-        if value < self.__acceleration_minimum or value > self.__acceleration_maximum :
-            raise ValueError('Acceleration invalid: Value exceeds limit.')
         if self.moving :
             raise StateException()
+        if value < self.__acceleration_minimum or value > self.__acceleration_maximum :
+            raise ValueError('Acceleration invalid: Value exceeds limit.')
         if value == self.__acceleration_moving :
             return
         self.__acceleration_moving_set_external(value)
@@ -246,7 +268,7 @@ class Motor(abc.ABC) :
         """
         if self.__position_valid :
             return self.__position
-        value = self._direction * self._position_actual_get()
+        value = self.__direction_sign * self._position_actual_get()
         if not self.__moving :
             self.__position = value
             self.__position_valid = True
@@ -257,22 +279,19 @@ class Motor(abc.ABC) :
         """
         Sets the position of the motor in units of microsteps.
 
+        The position can not be set while the motor is moving.
+
         Values: [`POSITION_MINIMUM`, `POSITION_MAXIMUM`]
 
-        Note: The position can not be set while the motor is moving.
+        :raises StateException:
+            Motor is moving.
+        :raises ValueError:
+            Position invalid.
         """
         if self.moving :
             raise StateException()
         Motor._position_verify(value)
-        if self.__position_valid and self.__position == value :
-            return
-        # Setting the position while ramp mode is not "velocity" moves the motor.
-        if self.__ramp_mode != Motor._RampMode.VELOCITY :
-            self._ramp_mode_set(Motor._RampMode.VELOCITY)
-            self.__ramp_mode = Motor._RampMode.VELOCITY
-        self._position_actual_set(self._direction * value)
-        self.__position = value
-        self.__position_valid = True
+        self._position_set(value)
 
     @property
     def position_target(self) -> int :
@@ -281,7 +300,7 @@ class Motor(abc.ABC) :
 
         Values: [`POSITION_MINIMUM`, `POSITION_MAXIMUM`]
         """
-        return self._direction * self._position_target_get()
+        return self.__direction_sign * self._position_target_get()
 
     @property
     def moving(self) -> bool :
@@ -304,28 +323,32 @@ class Motor(abc.ABC) :
         """
         Sets the microstep resolution of the motor.
 
+        The microstep resolution can not be set while the motor is moving.
+
         Values: `MICROSTEP_RESOLUTIONS`
+
+        :raises StateException:
+            Motor is moving.
+        :raises ValueError:
+            Microstep resolution invalid.
 
         This value dictates the maximum velocity of the motor.
 
         If the resulting maximum velocity exceeds the moving velocity, the moving velocity is
         reduced to the maximum velocity.
-
-        Note: The microstep resolution can not be set while the motor is moving.
         """
+        if self.moving :
+            raise StateException()
         try :
             value_internal = Motor.__MICROSTEP_RESOLUTION[value]
         except KeyError :
             raise ValueError('Microstep resolution invalid: Value unknown.')
-        else :
-            if self.moving :
-                raise StateException()
-            if value == self.__microstep_resolution :
-                return
-            self._microstep_resolution_set(value_internal)
-            self.__microstep_resolution = value
-            self.__velocity_extrema_update()
-            self.__acceleration_extrema_update()
+        if value == self.__microstep_resolution :
+            return
+        self._microstep_resolution_set(value_internal)
+        self.__microstep_resolution = value
+        self.__velocity_extrema_update()
+        self.__acceleration_extrema_update()
 
     @property
     def standby_delay(self) -> int :
@@ -342,6 +365,9 @@ class Motor(abc.ABC) :
         Sets the standby delay of the motor in units of milliseconds.
 
         Values: [`STANDBY_DELAY_MINIMUM`, `STANDBY_DELAY_MAXIMUM`]
+
+        :raises ValueError:
+            Standby delay invalid.
         """
         if value < Motor.STANDBY_DELAY_MINIMUM or value > Motor.STANDBY_DELAY_MAXIMUM :
             raise ValueError("Standby delay invalid: Value exceeds limit.")
@@ -357,7 +383,7 @@ class Motor(abc.ABC) :
         """
         Gets the freewheeling delay of the motor in units of milliseconds.
 
-        Values: `FREEWHEELING_DELAY_DISABLE`, [`FREEWHEELING_DELAY_MINIMUM`,
+        Values: `FREEWHEELING_DELAY_DISABLED`, [`FREEWHEELING_DELAY_MINIMUM`,
         `FREEWHEELING_DELAY_MAXIMUM`]
         """
         return self.__freewheeling_delay
@@ -367,10 +393,13 @@ class Motor(abc.ABC) :
         """
         Sets the freewheeling delay of the motor in units of milliseconds.
 
-        Values: `FREEWHEELING_DELAY_DISABLE`, [`FREEWHEELING_DELAY_MINIMUM`,
+        Values: `FREEWHEELING_DELAY_DISABLED`, [`FREEWHEELING_DELAY_MINIMUM`,
         `FREEWHEELING_DELAY_MAXIMUM`]
+
+        :raises ValueError:
+            Freewheeling delay invalid.
         """
-        if value != Motor.FREEWHEELING_DELAY_DISABLE and (
+        if value != Motor.FREEWHEELING_DELAY_DISABLED and (
             value < Motor.FREEWHEELING_DELAY_MINIMUM or value > Motor.FREEWHEELING_DELAY_MAXIMUM
         ) :
             raise ValueError("Freewheeling delay invalid: Value exceeds limit.")
@@ -394,29 +423,42 @@ class Motor(abc.ABC) :
 
         def __getitem__(self, number : int) -> int :
             """
-            Gets the position of the coordinate with the given number in units of microsteps.
+            Gets the position of a coordinate in units of microsteps.
 
-            Number values: [0, len(self))
+            Values [`Motor.POSITION_MINIMUM`, `Motor.POSITION_MAXIMUM`]
 
-            Position values: [`Motor.POSITION_MINIMUM`, `MOTOR.POSITION_MAXIMUM`]
+            :param number:
+                Number of the coordinate.
+                Values: [0, len(self))
+
+            :raises ValueError:
+                Coordinate number invalid.
             """
             self.__module_coordinates._number_verify(number)
             position = self.__module_coordinates._get(number, self.__motor.number)
-            return self.__motor._direction * position
+            return self.__motor._direction_sign * position
 
         def __setitem__(self, number : int, position : int) -> None :
             """
-            Sets the position of the coordinate with the given number in units of microsteps.
+            Sets the position of a coordinate in units of microsteps.
 
-            Number values: [0, len(self))
+            :param number:
+                Number of the coordinate.
+                Values: [0, len(self))
+            :param position:
+                Position of the coordinate.
+                Values: [`Motor.POSITION_MINIMUM`, `Motor.POSITION_MAXIMUM`]
 
-            Position values: [`Motor.POSITION_MINIMUM`, `Motor.POSITION_MAXIMUM`]
+            :raises ValueError:
+                Coordinate number invalid.
+            :raises ValueError:
+                Position invalid.
             """
             self.__module_coordinates._number_verify(number)
             Motor._position_verify(position)
             return self.__module_coordinates._set(
                 number, self.__motor.number,
-                self.__motor._direction * position
+                self.__motor._direction_sign * position
             )
 
         def _revert(self) -> None :
@@ -435,50 +477,74 @@ class Motor(abc.ABC) :
         return self.__coordinates
 
     def move_right(self, wait_while_moving : bool = True) -> None :
-        """Moves the motor in right direction until stopped."""
+        """
+        Moves the motor in right direction until stopped.
+
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+        """
         self._move_indicate(Motor._RampMode.VELOCITY)
-        (
-            self.__module._motor_rotate_right
-            if not self.direction_reversed else
-            self.__module._motor_rotate_left
-        )(self.__number, self.__velocity_moving_internal)
+        if not self.direction_reversed :
+            self.__module._motor_rotate_right(self.__number, self.__velocity_moving_internal)
+        else :
+            self.__module._motor_rotate_left(self.__number, self.__velocity_moving_internal)
         if wait_while_moving :
             self.wait_while_moving()
 
     def move_left(self, wait_while_moving : bool = True) -> None :
-        """Moves the motor in left direction until stopped."""
+        """
+        Moves the motor in left direction until stopped.
+
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+        """
         self._move_indicate(Motor._RampMode.VELOCITY)
-        (
-            self.__module._motor_rotate_left
-            if not self.direction_reversed else
-            self.__module._motor_rotate_right
-        )(self.__number, self.__velocity_moving_internal)
+        if not self.direction_reversed :
+            self.__module._motor_rotate_left(self.__number, self.__velocity_moving_internal)
+        else :
+            self.__module._motor_rotate_right(self.__number, self.__velocity_moving_internal)
         if wait_while_moving :
             self.wait_while_moving()
 
     def move_to(self, position : int, wait_while_moving : bool = True) -> None :
         """
-        Moves the motor to the given position in units of microsteps.
+        Moves the motor to a position in units of microsteps.
 
-        If the position is greater then the current position the motor moves in right direction.
+        If the position is greater then the current position of the motor, the motor moves in right
+        direction.
 
-        If the position is less then the current position the motor moves in left direction.
+        If the position is less then the current position of the motor, the motor moves in left
+        direction.
 
-        Values: [`POSITION_MINIMUM`, `POSITION_MAXIMUM`]
+        :param position:
+            Position to move the motor to.
+            Values: [`POSITION_MINIMUM`, `POSITION_MAXIMUM`]
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+
+        :raises ValueError:
+            Position invalid.
         """
         if not self.__moving and self.__position_valid and self.__position == position :
             return
         Motor._position_verify(position)
         self._move_indicate(Motor._RampMode.POSITION)
-        self.__module._motor_move_to(self.__number, self._direction * position)
+        self.__module._motor_move_to(self.__number, self.__direction_sign * position)
         if wait_while_moving :
             self.wait_while_moving()
 
     def move_to_coordinate(self, coordinate_number : int, wait_while_moving : bool = True) -> None :
         """
-        Moves the motor to ghe given coordinate.
+        Moves the motor to a coordinate.
 
-        Values: [0, `model.coordinate_count`)
+        :param coordinate_number:
+            Number of the coordinate to move the motor to.
+            Values: [´0´, `module.coordinate_count`)
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+
+        :raises ValueError:
+            Coordinate number invalid.
         """
         if coordinate_number < 0 or coordinate_number >= self.__module.coordinate_count :
             raise ValueError('Coordinate number invalid: Value negative or exceeds limit.')
@@ -489,27 +555,39 @@ class Motor(abc.ABC) :
 
     def move_by(self, distance : int, wait_while_moving : bool = True) -> None :
         """
-        Moves the motor by the given distance in units of microsteps.
+        Moves the motor by a distance in units of microsteps.
 
-        A positive distance moves the motor in right direction.
+        If the distance is positive, the motor moves in right direction.
 
-        A negative distance moves the motor in left direction.
+        If the distance is negative, the motor moves in left direction.
 
-        Values: [`DISTANCE_MINIMUM`, `DISTANCE_MAXIMUM`]
+        The position of the motor will overflow if the sum of the position and the distance exceeds
+        the limits of the position of `POSITION_MINIMUM` or `POSITION_MAXIMUM`.
 
-        Note: The position of the motor will overflow if the sum of the position and the distance
-        exceeds the limits of the position of `POSITION_MINIMUM` or `POSITION_MAXIMUM`.
+        :param distance:
+            Position to move the motor to.
+            Values: Values: [`DISTANCE_MINIMUM`, `DISTANCE_MAXIMUM`]
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+
+        :raises ValueError:
+            Distance invalid.
         """
         if distance == 0 and not self.__moving :
             return
         Motor._distance_verify(distance)
         self._move_indicate(Motor._RampMode.POSITION)
-        self.__module._motor_move_by(self.__number, self._direction * distance)
+        self.__module._motor_move_by(self.__number, self.__direction_sign * distance)
         if wait_while_moving :
             self.wait_while_moving()
 
     def stop(self, wait_while_moving : bool = True) -> None :
-        """Stops the motor."""
+        """
+        Stops the motor.
+
+        :param wait_while_moving:
+            If the function waits while the motor is moving.
+        """
         if not self.__moving :
             return
         self.__ramp_mode = Motor._RampMode.VELOCITY
@@ -527,6 +605,16 @@ class Motor(abc.ABC) :
     def _position_verify(value : int) -> None :
         if value < Motor.POSITION_MINIMUM or value > Motor.POSITION_MAXIMUM :
             raise ValueError('Position invalid: Value exceeds limit.')
+
+    def _position_set(self, value : int) -> None :
+        if self.__position_valid and self.__position == value :
+            return
+        # Setting the position while ramp mode is not "velocity" moves the motor.
+        if self.__ramp_mode != Motor._RampMode.VELOCITY :
+            self._ramp_mode_set(Motor._RampMode.VELOCITY)
+        self._position_actual_set(self.__direction_sign * value)
+        self.__position = value
+        self.__position_valid = True
 
     @staticmethod
     def _distance_verify(value : int) -> None :
@@ -556,6 +644,7 @@ class Motor(abc.ABC) :
         self.__ramp_divisor_exponent = 0
         self.__position_valid = False
         self.__position = 0
+        self.__direction_sign = 1
         self.__velocity_moving_internal = self._velocity_moving_get()
         self.__velocity_moving = self._velocity_external(
             self.__velocity_moving_internal
@@ -567,7 +656,6 @@ class Motor(abc.ABC) :
         self.__velocity_extrema_update()
         self.__acceleration_extrema_update()
         self.__coordinates = Motor.Coordinates(self)
-        self._direction = 1
         self._move_indicate(self._ramp_mode_get())
 
     @abc.abstractmethod
@@ -628,6 +716,10 @@ class Motor(abc.ABC) :
     def _position_reached_get(self) -> bool :
         """Gets if the motor has reached its target position."""
         return self.__parameter_get_bool(Motor.__Parameter.POSITION_REACHED)
+
+    @property
+    def _direction_sign(self) -> int :
+        return self.__direction_sign
 
     def _pulse_divisor_exponent_set(self, value : int) -> None :
         """Sets the exponent of the pulse divisor of the motor."""
@@ -862,13 +954,13 @@ class Motor(abc.ABC) :
     }
 
     def __parameter_set(self, parameter : __Parameter, value : int) -> None :
-        self.__module._axis_parameter_set(self.__number, parameter, value)
+        self.__module._axis_parameter_set(self.__number, parameter.value, value)
 
     def __parameter_set_bool(self, parameter : __Parameter, state : bool) -> None :
         self.__parameter_set(parameter, int(state))
 
     def __parameter_get(self, parameter : __Parameter) -> int :
-        return self.__module._axis_parameter_get(self.__number, parameter)
+        return self.__module._axis_parameter_get(self.__number, parameter.value)
 
     def __parameter_get_bool(self, parameter : __Parameter) -> bool :
         return bool(self.__parameter_get(parameter))
@@ -887,7 +979,7 @@ class Motor(abc.ABC) :
 
     def __velocity_actual_get_external(self) -> float :
         """Gets the actual velocity of the motor in units of fullsteps per second."""
-        return self._direction * self._velocity_external(self._velocity_actual_get())
+        return self.__direction_sign * self._velocity_external(self._velocity_actual_get())
 
     def __velocity_moving_set_external(self, value : float) -> None :
         value_internal = self._velocity_moving_set_external(value)

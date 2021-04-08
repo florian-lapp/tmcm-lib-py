@@ -7,6 +7,7 @@ import typing
 class __Environment :
 
     PORT_NAME = 'COM1'
+    ADDRESS = 1
     # Millivolts.
     SUPPLY_VOLTAGE = 24000
     # Millivolts.
@@ -51,7 +52,7 @@ class __Environment :
 
     def __init__(self) -> None :
         port = Port(self.PORT_NAME)
-        module = Module.construct(port)
+        module = Module.construct(port, self.ADDRESS)
         motors = module.motors
         self.__port = port
         self.__module = module

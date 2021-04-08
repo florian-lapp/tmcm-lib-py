@@ -12,8 +12,13 @@ class InternalException(Exception) :
     """
     pass
 
+class AddressException(Exception) :
+    """Exception that indicates that an address is wrong."""
+    pass
+
 class IdentityException(Exception) :
     """Exception that indicates that an identity is wrong."""
+    pass
 
 class ChecksumException(Exception, abc.ABC) :
     """
@@ -46,3 +51,5 @@ class StateException(Exception) :
     invoked.
     """
     pass
+
+del abc

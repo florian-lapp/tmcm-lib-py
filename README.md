@@ -42,7 +42,7 @@ motor.switch_limit_right.enabled = True
 ``` python
 # Prints the identity of the module (e.g. "3110" for TMCM-3110).
 print(module.identity)
-# Prints the firmware version of the module (e.g. "(1, 14)" for version 1.14).
+# Prints the firmware version of the module (e.g. "(1, 14)" for 1.14).
 print(module.firmware_version)
 ```
 

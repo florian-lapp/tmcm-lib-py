@@ -14,14 +14,33 @@ class Module(abc.ABC) :
 
     IDENTITY_IGNORE = 0
     """Ignore identity."""
+    ADDRESS_DEFAULT = 1
+    """Default address."""
+    ADDRESS_MINIMUM = 1
+    """Minimum address."""
+    ADDRESS_MAXIMUM = 255
+    """Maximum address."""
 
     @classmethod
-    def identify(cls, port : Port) -> typing.Tuple[int, typing.Tuple[int, int]] :
-        """Gets the identity and the firmware version of the module connected to the given port."""
-        return cls.__firmware_version_get(port)
+    def identify(
+        cls,
+        port : Port,
+        address : int = ADDRESS_DEFAULT
+    ) -> typing.Tuple[int, typing.Tuple[int, int]] :
+        """
+        Gets the identity and the firmware version of the module connected to the given port having
+        the given address.
+        """
+        cls.__address_verify(address)
+        return cls.__firmware_version_get(port, address)
 
     @classmethod
-    def construct(cls, port : Port, identity : int = IDENTITY_IGNORE) -> 'Module' :
+    def construct(
+        cls,
+        port : Port,
+        address : int = ADDRESS_DEFAULT,
+        identity : int = IDENTITY_IGNORE
+    ) -> 'Module' :
         """
         Constructs a module of the class identified by the module connected to the given port.
 
@@ -32,7 +51,7 @@ class Module(abc.ABC) :
 
         Raises `NotImplementedError` if the connected module is not implemented.
         """
-        identity_port, _ = cls.identify(port)
+        identity_port, _ = cls.identify(port, address)
         if identity != cls.IDENTITY_IGNORE and identity != identity_port :
             raise IdentityException()
         try :
@@ -44,8 +63,17 @@ class Module(abc.ABC) :
         else :
             module_cls = getattr(module, cls.__CLASS_NAME, None)
             if module_cls and issubclass(module_cls, Module) :
-                return module_cls(port)
+                return module_cls(port, address)
         raise NotImplementedError()
+
+    @property
+    def address(self) -> int :
+        """
+        Gets the address of the module.
+
+        Values: [`ADDRESS_MINIMUM`, `ADDRESS_MAXIMUM`]
+        """
+        return self.__address
 
     @property
     def identity(self) -> int :
@@ -199,6 +227,7 @@ class Module(abc.ABC) :
     def __init__(
         self,
         port : Port,
+        address : int,
         identity : int,
         motor_count : int,
         motor_current_maximum : int,
@@ -207,10 +236,12 @@ class Module(abc.ABC) :
         motor_class : typing.Type['Motor'],
         coordinate_count : int
     ) -> None :
-        identity_port, firmware_version_port = self.__firmware_version_get(port)
+        Module.__address_verify(address)
+        identity_port, firmware_version_port = self.__firmware_version_get(port, address)
         if identity_port != identity :
             raise IdentityException()
         self.__port = port
+        self.__address = address
         self.__identity = identity_port
         self.__firmware_version = firmware_version_port
         self.__motor_current_minimum = motor_current_maximum // Module._MOTOR_CURRENT_STEP_COUNT
@@ -426,15 +457,15 @@ class Module(abc.ABC) :
     def __command_request_transmit_port(
         cls,
         port : Port,
-        command_number : int,
+        address : int,
+        command : __Command,
         type_number : int,
         bank_number : int,
         value : int
     ) -> None :
-        module_address = 0
         data = [
-            module_address,
-            command_number,
+            address,
+            command.value,
             type_number,
             bank_number,
             *value.to_bytes(4, byteorder = cls.__COMMAND_BYTE_ORDER, signed = True),
@@ -443,72 +474,73 @@ class Module(abc.ABC) :
         data[8] = cls.__command_checksum_calculate(data[0 : 8])
         # DEBUG
         # print(
-        #     command_number.name,
-        #     type_number.name if hasattr(type_number, 'name') else type_number,
+        #     command.name,
+        #     type_number,
         #     bank_number,
         #     value
         # )
-        port.transmit(bytes(data))
+        port._transmit(bytes(data))
 
     def __command_request_transmit(
         self,
-        command_number : int,
+        command : __Command,
         type_number : int = 0,
         bank_number : int = 0,
         value : int = 0
     ) -> None :
         Module.__command_request_transmit_port(
             self.__port,
-            command_number,
+            command,
             type_number,
             bank_number,
             value
         )
 
     @classmethod
-    def __command_reply_receive_port(cls, port : Port) -> int :
-        data = port.receive(Module.__COMMAND_REPLY_LENGTH)
-        # Irrelevant for USB connections.
+    def __command_reply_receive_port(cls, port : Port, address : int, command : __Command) -> int :
+        data = port._receive(Module.__COMMAND_REPLY_LENGTH)
+        # Ignore host address.
         # host_address = data[0]
-        # Irrelevant for USB connections.
-        # module_address = data[1]
+        address_ = data[1]
         status = data[2]
-        # Irrelevant.
-        # command_number = data[3]
+        command_number = data[3]
         value = int.from_bytes(data[4 : 8], byteorder = cls.__COMMAND_BYTE_ORDER, signed = True)
         checksum = data[8]
         if checksum != cls.__command_checksum_calculate(data[0 : 8]) :
             raise ChecksumReplyException()
+        if address_ != address :
+            raise AddressException()
         if status == cls.__Status.CHECKSUM_WRONG :
             raise ChecksumRequestException()
         if status != cls.__Status.SUCCESS :
             raise InternalException()
+        if command_number != command.value :
+            raise InternalException()
         return value
-
-    def __command_reply_receive(self) -> int :
-        return Module.__command_reply_receive_port(self.__port)
 
     @classmethod
     def __command_transceive_port(
         cls,
         port : Port,
-        command_number : int,
+        address : int,
+        command : __Command,
         type_number : int = 0,
         bank_number : int = 0,
         value : int = 0
     ) -> int :
         cls.__command_request_transmit_port(
             port,
-            command_number,
+            address,
+            command,
             type_number,
             bank_number,
             value
         )
-        value_return = cls.__command_reply_receive_port(port)
+        value_return = cls.__command_reply_receive_port(port, address, command)
         # DEBUG
         # print(
-        #     command_number.name,
-        #     type_number.name if hasattr(type_number, 'name') else type_number,
+        #     command.name,
+        #     type_number,
         #     bank_number,
         #     value,
         #     value_return
@@ -517,23 +549,34 @@ class Module(abc.ABC) :
 
     def __command_transceive(
         self,
-        command_number : int,
+        command : __Command,
         type_number : int = 0,
         bank_number : int = 0,
         value : int = 0
     ) -> int :
         return Module.__command_transceive_port(
             self.__port,
-            command_number,
+            self.__address,
+            command,
             type_number,
             bank_number,
             value
         )
 
     @classmethod
-    def __firmware_version_get(cls, port : Port) -> typing.Tuple[int, typing.Tuple[int, int]] :
+    def __address_verify(cls, address : int) -> None :
+        if address < cls.ADDRESS_MINIMUM or address > cls.ADDRESS_MAXIMUM :
+            raise ValueError('Address invalid: Value exceeds limit.')
+
+    @classmethod
+    def __firmware_version_get(
+        cls,
+        port : Port,
+        address : int
+    ) -> typing.Tuple[int, typing.Tuple[int, int]] :
         value = cls.__command_transceive_port(
             port,
+            address,
             Module.__Command.CTL_FIRMWARE_VERSION_GET,
             Module.__CTL_FIRMWARE_VERSION_GET_TYPE_BINARY
         )
@@ -551,13 +594,13 @@ class Module(abc.ABC) :
         )
 
     def __parameter_set(self, parameter : __Parameter, value : int) -> None :
-        self.__command_transceive(Module.__Command.SGP, parameter, 0, value)
+        self.__command_transceive(Module.__Command.SGP, parameter.value, 0, value)
 
     def __parameter_set_bool(self, parameter : __Parameter, state : bool) -> None :
         self.__parameter_set(parameter, int(state))
 
     def __parameter_get(self, parameter : __Parameter) -> int :
-        return self.__command_transceive(Module.__Command.GGP, parameter)
+        return self.__command_transceive(Module.__Command.GGP, parameter.value)
 
     def __parameter_get_bool(self, parameter : __Parameter) -> bool :
         return bool(self.__parameter_get(parameter))

@@ -17,17 +17,38 @@ class MotorUnion :
         coordinate_number : int = 0
     ) -> None :
         """
-        Constructs a motor union of motors of the given module and motor numbers.
+        Constructs a motor union.
 
-        The coordinate number specifies the coordinate to temporarily store the position to move the
-        motors to.
+        :param module:
+            Module of the motors of the motor union.
+        :param motor_numbers:
+            Numbers of the motors of the motor union.
+            Values: [`0`, `module.motor_count`)
+        :param coordinate_number:
+            Number of a coordinate to temporarily store the position to move the motors to.
+            Values: [`0`, `module.coordinate_count`)
+
+        :raises ValueError:
+            Motor numbers invalid.
+        :raises ValueError:
+            Coordinate number invalid.
         """
+        if not motor_numbers :
+            raise ValueError('Motor numbers invalid: Empty.')
+        motor_numbers_ : typing.Set[int] = set()
+        for motor_number in motor_numbers :
+            if motor_number < 0 or motor_number >= module.motor_count :
+                raise ValueError('Motor numbers invalid: Value exceeds limit.')
+            if motor_number in motor_numbers_ :
+                raise ValueError('Motor numbers invalid: Values not unique.')
+            motor_numbers_.add(motor_number)
+        module.coordinates._number_verify(coordinate_number)
         self.__module = module
         self.__motors = tuple(module.motors[motor_number] for motor_number in motor_numbers)
         self.__coordinate_number = coordinate_number
         self.__motor_numbers = functools.reduce(
             operator.ior,
-            map(lambda motor_number: 2 ** motor_number, motor_numbers)
+            map(lambda motor_number : 2 ** motor_number, motor_numbers)
         )
         module.coordinates._number_verify(coordinate_number)
 
@@ -64,12 +85,19 @@ class MotorUnion :
         """
         Sets the position of the motor union as a vector in units of microsteps.
 
-        Note: The position can not be set while any motor of the motor union is moving.
+        The position can not be set while the motor union is moving.
+
+        :raises StateException:
+            Motor union is moving.
+        :raises ValueError:
+            Position invalid.
         """
         if self.moving :
             raise StateException()
+        for position_ in position :
+            Motor._position_verify(position_)
         for motor, position in zip(self.__motors, position) :
-            motor.position = position
+            motor._position_set(position)
 
     @property
     def moving(self) -> bool :
@@ -84,8 +112,17 @@ class MotorUnion :
         synchronously : bool = True
     ) -> None :
         """
-        Moves the motor union synchronously or asynchronously to the given position as a vector in
-        units of microsteps.
+        Moves the motor union to a position as a vector in units of microsteps.
+
+        :param position:
+            Position to move the motor union to.
+        :param wait_while_moving:
+            If the function waits while the motor union is moving.
+        :param synchronously:
+            If the motors of the motor union move synchronously or asynchronously.
+
+        :raises ValueError:
+            Position invalid.
         """
         self.__coordinate_set(position)
         for motor in self.__motors :
@@ -102,6 +139,12 @@ class MotorUnion :
             self.wait_while_moving()
 
     def stop(self, wait_while_moving : bool = True) -> None :
+        """
+        Stops the motor union.
+
+        :param wait_while_moving:
+            If the function waits while the motor union is moving.
+        """
         for motor in self.__motors :
             motor.stop(False)
         if wait_while_moving :

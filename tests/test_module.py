@@ -1,5 +1,5 @@
 from tests.environment import instance as environment
-from tmcm_lib import Module
+from tmcm_lib import Module, AddressException, IdentityException
 
 import unittest
 import typing
@@ -17,15 +17,39 @@ class TestModule(unittest.TestCase) :
     COORDINATE_COUNT : int
 
     def test_identify(self) :
-        self.assertEqual(Module.identify(environment.port), (
+        self.assertEqual(Module.identify(environment.port, address = 1), (
             self.IDENTITY,
-            self.FIRMWARE_VERSION
+            self.FIRMWARE_VERSION,
         ))
 
     def test_construct(self) :
-        module = Module.construct(environment.port)
+        with self.assertRaises(ValueError) :
+            Module.construct(environment.port, address = 0)
+        with self.assertRaises(ValueError) :
+            Module.construct(environment.port, address = 256)
+        with self.assertRaises(AddressException) :
+            Module.construct(
+                environment.port, address = (
+                    environment.ADDRESS + 1
+                    if environment.ADDRESS < 128 else
+                    environment.ADDRESS - 1
+                )
+            )
+        with self.assertRaises(IdentityException) :
+            Module.construct(
+                environment.port,
+                address = environment.ADDRESS,
+                identity = ""
+            )
+        module = Module.construct(
+            environment.port, address = environment.ADDRESS, identity = self.IDENTITY
+        )
         self.assertIsInstance(module, Module)
+        self.assertEqual(module.address, environment.ADDRESS)
         self.assertEqual(module.identity, self.IDENTITY)
+
+    def test_address(self) :
+        self.assertEqual(self.__module.address, environment.ADDRESS)
 
     def test_identity(self) :
         self.assertEqual(self.__module.identity, self.IDENTITY)

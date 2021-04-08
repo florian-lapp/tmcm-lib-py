@@ -114,30 +114,53 @@ class TestMotor(unittest.TestCase) :
     def test_velocity_moving(self, motor : Motor) :
         for microstep_resolution in Motor.MICROSTEP_RESOLUTIONS :
             motor.microstep_resolution = microstep_resolution
+            velocity_minimum = motor.velocity_minimum
+            velocity_maximum = motor.velocity_maximum
             with self.assertRaises(ValueError) :
-                motor.velocity_moving = math.nextafter(motor.velocity_minimum, -math.inf)
+                motor.velocity_moving = math.nextafter(velocity_minimum, -math.inf)
             with self.assertRaises(ValueError) :
-                motor.velocity_moving = math.nextafter(motor.velocity_maximum, +math.inf)
-            motor.velocity_moving = motor.velocity_minimum
-            self.assertEqual(motor.velocity_moving, motor.velocity_minimum)
-            motor.velocity_moving = motor.velocity_maximum
-            self.assertEqual(motor.velocity_moving, motor.velocity_maximum)
+                motor.velocity_moving = math.nextafter(velocity_maximum, +math.inf)
+            motor.velocity_moving = velocity_minimum
+            self.assertEqual(motor.velocity_moving, velocity_minimum)
+            motor.velocity_moving = velocity_maximum
+            self.assertEqual(motor.velocity_moving, velocity_maximum)
+            velocity_range = velocity_maximum - velocity_minimum
+            for portion in range(1, 100) :
+                velocity = velocity_minimum + velocity_range * portion / 100
+                motor.velocity_moving = velocity
+                error_absolute = motor.velocity_moving - velocity
+                error_relative = error_absolute / velocity
+                self.assertLessEqual(error_relative, 0.0)
+                self.assertGreater(error_relative, -0.001)
 
     @subtest_motor
     def test_acceleration_moving(self, motor : Motor) :
         for microstep_resolution in Motor.MICROSTEP_RESOLUTIONS :
             motor.microstep_resolution = microstep_resolution
-            for pulse_divisor_exponent in range(0, 13 + 1) :
-                velocity_moving = 250_000 / (microstep_resolution * 2 ** pulse_divisor_exponent)
-                motor.velocity_moving = velocity_moving
+            velocity_minimum = motor.velocity_minimum
+            velocity_maximum = motor.velocity_maximum
+            velocity_range = velocity_maximum - velocity_minimum
+            for velocity_portion in range(1, 11) :
+                velocity = velocity_minimum + velocity_range * velocity_portion / 10
+                motor.velocity_moving = velocity
+                acceleration_minimum = motor.acceleration_minimum
+                acceleration_maximum = motor.acceleration_maximum
                 with self.assertRaises(ValueError) :
-                    motor.acceleration_moving = math.nextafter(motor.acceleration_minimum, -math.inf)
+                    motor.acceleration_moving = math.nextafter(acceleration_minimum, -math.inf)
                 with self.assertRaises(ValueError) :
-                    motor.acceleration_moving = math.nextafter(motor.acceleration_maximum, +math.inf)
-                motor.acceleration_moving = motor.acceleration_minimum
-                self.assertEqual(motor.acceleration_moving, motor.acceleration_minimum)
-                motor.acceleration_moving = motor.acceleration_maximum
-                self.assertEqual(motor.acceleration_moving, motor.acceleration_maximum)
+                    motor.acceleration_moving = math.nextafter(acceleration_maximum, +math.inf)
+                motor.acceleration_moving = acceleration_minimum
+                self.assertEqual(motor.acceleration_moving, acceleration_minimum)
+                motor.acceleration_moving = acceleration_maximum
+                self.assertEqual(motor.acceleration_moving, acceleration_maximum)
+                acceleration_range = acceleration_maximum - acceleration_minimum
+                for portion in range(1, 100) :
+                    acceleration = acceleration_minimum + acceleration_range * portion / 100
+                    motor.acceleration_moving = acceleration
+                    error_absolute = motor.acceleration_moving - acceleration
+                    error_relative = error_absolute / acceleration
+                    self.assertLessEqual(error_relative, 0.0)
+                    self.assertGreater(error_relative, -0.025)
 
     @subtest_motor_direction
     def test_position(self, motor : Motor) :

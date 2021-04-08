@@ -22,15 +22,16 @@ class Module(ModuleGeneric) :
     COORDINATE_COUNT = 20
     """Coordinate count of the module."""
 
-    def __init__(self, port : Port) -> None :
+    def __init__(self, port : Port, address : int = ModuleGeneric.ADDRESS_DEFAULT) -> None :
         """
-        Constructs a module connected to the given port.
+        Constructs a module connected to the given port having the given address.
 
         Raises `IdentityException` if the identity of the module connected to the given port is
         not equal to `IDENTITY`.
         """
         super().__init__(
             port,
+            address,
             Module.IDENTITY,
             Module.MOTOR_COUNT,
             Module.MOTOR_CURRENT_MAXIMUM,
