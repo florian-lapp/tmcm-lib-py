@@ -838,8 +838,8 @@ class Motor(abc.ABC) :
 
     class _RampMode(enum.IntEnum) :
         """Ramp mode of a motor."""
-        POSITION      = 0,
-        POSITION_SOFT = 1,
+        POSITION      = 0
+        POSITION_SOFT = 1
         VELOCITY      = 2
 
     def _ramp_mode_set(self, ramp_mode : _RampMode) -> None :
@@ -910,35 +910,35 @@ class Motor(abc.ABC) :
         self.__position = 0
 
     class __Parameter(enum.IntEnum) :
-        POSITION_TARGET         = 0,
-        POSITION_ACTUAL         = 1,
-        POSITION_REACHED        = 8,
+        POSITION_TARGET         = 0
+        POSITION_ACTUAL         = 1
+        POSITION_REACHED        = 8
 
-        PULSE_DIVISOR_EXPONENT  = 154,
-        RAMP_DIVISOR_EXPONENT   = 153,
+        PULSE_DIVISOR_EXPONENT  = 154
+        RAMP_DIVISOR_EXPONENT   = 153
 
-        VELOCITY_TARGET         = 2,
-        VELOCITY_ACTUAL         = 3,
-        VELOCITY_MOVING         = 4,
+        VELOCITY_TARGET         = 2
+        VELOCITY_ACTUAL         = 3
+        VELOCITY_MOVING         = 4
 
-        ACCELERATION_ACTUAL     = 135,
-        ACCELERATION_MOVING     = 5,
+        ACCELERATION_ACTUAL     = 135
+        ACCELERATION_MOVING     = 5
         
-        CURRENT_MOVING          = 6,
-        CURRENT_STANDBY         = 7,
-        CURRENT_ACCELERATION    = 200,
+        CURRENT_MOVING          = 6
+        CURRENT_STANDBY         = 7
+        CURRENT_ACCELERATION    = 200
         
-        MICROSTEP_RESOLUTION    = 140,
+        MICROSTEP_RESOLUTION    = 140
 
-        RAMP_MODE               = 138,
+        RAMP_MODE               = 138
 
-        STANDBY_DELAY           = 214,
-        FREEWHEELING_DELAY      = 204,
+        STANDBY_DELAY           = 214
+        FREEWHEELING_DELAY      = 204
 
-        SWITCH_LIMIT_RIGHT_DISABLED = 12,
-        SWITCH_LIMIT_LEFT_DISABLED  = 13,
-        SWITCH_LIMIT_RIGHT_ACTIVE   = 10,
-        SWITCH_LIMIT_LEFT_ACTIVE    = 11,
+        SWITCH_LIMIT_RIGHT_DISABLED = 12
+        SWITCH_LIMIT_LEFT_DISABLED  = 13
+        SWITCH_LIMIT_RIGHT_ACTIVE   = 10
+        SWITCH_LIMIT_LEFT_ACTIVE    = 11
         SWITCH_HOME_ACTIVE          = 9
 
     __MICROSTEP_RESOLUTION = {

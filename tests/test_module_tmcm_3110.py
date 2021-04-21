@@ -4,7 +4,7 @@ from tmcm_lib.tmcm_3110.module import Module
 class TestModule(TestModuleGeneric) :
 
     CLASS = Module
-    IDENTITY = 3110
+    MODEL_NUMBER = 3110
     FIRMWARE_VERSION = (1, 14)
     MOTOR_COUNT = 3
     MOTOR_CURRENT_MINIMUM = 86

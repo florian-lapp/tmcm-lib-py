@@ -10,9 +10,9 @@ class Switch :
     class Type(enum.IntEnum) :
         """Type of a switch."""
 
-        LIMIT_RIGHT = 0,
+        LIMIT_RIGHT = 0
         """Right limit switch."""
-        LIMIT_LEFT  = 1,
+        LIMIT_LEFT  = 1
         """Left limit switch."""
         HOME        = 2
         """Home switch."""

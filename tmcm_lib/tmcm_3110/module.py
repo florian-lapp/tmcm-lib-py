@@ -5,8 +5,8 @@ from .motor import Motor
 class Module(ModuleGeneric) :
     """Module TMCM-3110."""
 
-    IDENTITY = 3110
-    """Identity of the module."""
+    MODEL_NUMBER = 3110
+    """Model number of the module."""
     MOTOR_COUNT = 3
     """Motor count of the module."""
 
@@ -26,13 +26,13 @@ class Module(ModuleGeneric) :
         """
         Constructs a module connected to the given port having the given address.
 
-        Raises `IdentityException` if the identity of the module connected to the given port is
-        not equal to `IDENTITY`.
+        Raises `ModelException` if the model number of the module connected to the given port is not
+        equal to `MODEL_NUMBER`.
         """
         super().__init__(
             port,
             address,
-            Module.IDENTITY,
+            Module.MODEL_NUMBER,
             Module.MOTOR_COUNT,
             Module.MOTOR_CURRENT_MAXIMUM,
             Module.MOTOR_FREQUENCY_MINIMUM,

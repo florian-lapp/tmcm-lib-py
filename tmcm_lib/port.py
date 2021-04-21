@@ -3,7 +3,7 @@ import serial
 class Port :
     """Port a module is connected to."""
 
-    BAUD_RATE_DEFAULT = 9600
+    BAUD_RATE_DEFAULT = 9_600
     """Default baud rate."""
 
     class Unavailability(Exception) :

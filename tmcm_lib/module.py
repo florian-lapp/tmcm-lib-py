@@ -4,6 +4,7 @@ from .exceptions import *
 import abc
 import enum
 import importlib
+import threading
 import typing
 
 if typing.TYPE_CHECKING :
@@ -12,14 +13,18 @@ if typing.TYPE_CHECKING :
 class Module(abc.ABC) :
     """Generic module."""
 
-    IDENTITY_IGNORE = 0
-    """Ignore identity."""
+    MODEL_NUMBER_IGNORE = 0
+    """Model number to ignore the model."""
     ADDRESS_DEFAULT = 1
     """Default address."""
     ADDRESS_MINIMUM = 1
     """Minimum address."""
     ADDRESS_MAXIMUM = 255
     """Maximum address."""
+    HEARTBEAT_TIMEOUT_DISABLED = 0
+    """Heartbeat timeout of a module with disabled heartbeat."""
+    HEARTBEAT_TIMEOUT_LIMIT = 65535
+    """Heartbeat timeout limit in units of milliseconds."""
 
     @classmethod
     def identify(
@@ -28,8 +33,8 @@ class Module(abc.ABC) :
         address : int = ADDRESS_DEFAULT
     ) -> typing.Tuple[int, typing.Tuple[int, int]] :
         """
-        Gets the identity and the firmware version of the module connected to the given port having
-        the given address.
+        Gets the model number and the firmware version of the module connected to the given port
+        having the given address.
         """
         cls.__address_verify(address)
         return cls.__firmware_version_get(port, address)
@@ -39,24 +44,24 @@ class Module(abc.ABC) :
         cls,
         port : Port,
         address : int = ADDRESS_DEFAULT,
-        identity : int = IDENTITY_IGNORE
+        model_number : int = MODEL_NUMBER_IGNORE
     ) -> 'Module' :
         """
         Constructs a module of the class identified by the module connected to the given port.
 
-        The identity specifies the expected identity of the module.
+        The model number specifies the expected model of the module.
 
-        Raises `IdentityException` if the identity is given and is not equal to the identity of
-        the module connected to the given port.
+        Raises `ModelException` if the model number is given and is not equal to the model number
+        of the module connected to the given port.
 
         Raises `NotImplementedError` if the connected module is not implemented.
         """
-        identity_port, _ = cls.identify(port, address)
-        if identity != cls.IDENTITY_IGNORE and identity != identity_port :
-            raise IdentityException()
+        model_number_port, _ = cls.identify(port, address)
+        if model_number != cls.MODEL_NUMBER_IGNORE and model_number != model_number_port :
+            raise ModelException()
         try :
             module = importlib.import_module(
-                '.' + cls.__MODULE_NAME.format(identity_port), __package__
+                '.' + cls.__MODULE_NAME.format(model_number_port), __package__
             )
         except ImportError :
             pass
@@ -76,18 +81,44 @@ class Module(abc.ABC) :
         return self.__address
 
     @property
-    def identity(self) -> int :
+    def model_number(self) -> int :
         """
-        Gets the identity of the module.
+        Gets the model number of the module.
 
-        Example: 3110 for TMCM-3110.
+        Example: `3110` for TMCM-3110.
         """
-        return self.__identity
+        return self.__model_number
 
     @property
     def firmware_version(self) -> typing.Tuple[int, int] :
         """Gets the firmware version of the module as major version and minor version."""
         return self.__firmware_version
+
+    @property
+    def heartbeat_timeout(self) -> int :
+        """
+        Gets the heartbeat timeout of the module in units of milliseconds.
+
+        Values: [`0`, `HEARTBEAT_TIMEOUT_LIMIT`]
+        """
+        return self.__heartbeat_timeout
+
+    @heartbeat_timeout.setter
+    def heartbeat_timeout(self, heartbeat_timeout : int) -> None :
+        """
+        Sets the heartbeat timeout of the module in units of milliseconds.
+
+        Values: [`0`, `HEARTBEAT_TIMEOUT_LIMIT`]
+
+        A value of zero will disable the heartbeat.
+        """
+        if heartbeat_timeout == self.__heartbeat_timeout :
+            return
+        if heartbeat_timeout < 0 or heartbeat_timeout > Module.HEARTBEAT_TIMEOUT_LIMIT :
+            raise ValueError('Heartbeat timeout invalid: Value negative or exceeds limit.')
+        self.__parameter_set(Module.__Parameter.HEARTBEAT_TIMEOUT, heartbeat_timeout)
+        self.__heartbeat_setup(heartbeat_timeout / 1_000)
+        self.__heartbeat_timeout = heartbeat_timeout
 
     @property
     def supply_voltage(self) -> int :
@@ -174,7 +205,7 @@ class Module(abc.ABC) :
             """
             Gets the position of a coordinate.
 
-            Number values: [0, len(self))
+            Number values: [`0`, `len(self)`)
 
             Position values: [`Motor.POSITION_MINIMUM`, `Motor.POSITION_MAXIMUM`]
             """
@@ -188,7 +219,7 @@ class Module(abc.ABC) :
             """
             Sets the position of a coordinate.
 
-            Number values: [0, len(self))
+            Number values: [`0`, `len(self)`)
 
             Position values: [`Motor.POSITION_MINIMUM`, `Motor.POSITION_MAXIMUM`]
             """
@@ -228,7 +259,7 @@ class Module(abc.ABC) :
         self,
         port : Port,
         address : int,
-        identity : int,
+        model_number : int,
         motor_count : int,
         motor_current_maximum : int,
         motor_frequency_minimum : float,
@@ -237,13 +268,18 @@ class Module(abc.ABC) :
         coordinate_count : int
     ) -> None :
         Module.__address_verify(address)
-        identity_port, firmware_version_port = self.__firmware_version_get(port, address)
-        if identity_port != identity :
-            raise IdentityException()
+        model_number_port, firmware_version_port = self.__firmware_version_get(port, address)
+        if model_number_port != model_number :
+            raise ModelException()
         self.__port = port
+        self.__port_lock = threading.Lock()
         self.__address = address
-        self.__identity = identity_port
+        self.__model_number = model_number_port
         self.__firmware_version = firmware_version_port
+        self.__heartbeat_thread : typing.Optional[threading.Thread] = None
+        self.__heartbeat_event : typing.Optional[threading.Event] = None
+        self.__heartbeat_event_timeout = 0.0
+        self.__heartbeat_timeout = self.__parameter_get(Module.__Parameter.HEARTBEAT_TIMEOUT)
         self.__motor_current_minimum = motor_current_maximum // Module._MOTOR_CURRENT_STEP_COUNT
         self.__motor_current_maximum = motor_current_maximum
         self.__motor_frequency_minimum = motor_frequency_minimum
@@ -391,44 +427,46 @@ class Module(abc.ABC) :
     class __Command(enum.IntEnum) :
         # Mnemonic commands
         # Rotate right
-        ROR = 1,
+        ROR = 1
         # Rotate left
-        ROL = 2,
+        ROL = 2
         # Motor stop
-        MST = 3,
+        MST = 3
         # Move to position
-        MVP = 4,
+        MVP = 4
         # Set axis parameter
-        SAP = 5,
+        SAP = 5
         # Get axis parameter
-        GAP = 6,
+        GAP = 6
         # Set global parameter
-        SGP = 9,
+        SGP = 9
         # Get global parameter
-        GGP = 10,
+        GGP = 10
         # Set input/output
-        SIO = 14,
+        SIO = 14
         # Get input/output
-        GIO = 15,
+        GIO = 15
         # Set coordinate
-        SCO = 30,
+        SCO = 30
         # Get coordinate
         GCO = 31
         # Control commands
-        CTL_FIRMWARE_VERSION_GET       = 136,
-        CTL_FACTORY_SETTINGS_RESTORE   = 137
+        CTL_APPLICATION_STATUS_GET   = 135
+        CTL_FIRMWARE_VERSION_GET     = 136
+        CTL_FACTORY_SETTINGS_RESTORE = 137
 
     class __Status(enum.IntEnum) :
-        SUCCESS             = 100,
-        COMMAND_LOADED      = 101,
-        CHECKSUM_WRONG      = 1,
-        COMMAND_INVALID     = 2,
-        TYPE_WRONG          = 3,
-        VALUE_INVALID       = 4,
-        STORAGE_LOCKED      = 5,
+        SUCCESS             = 100
+        COMMAND_LOADED      = 101
+        CHECKSUM_WRONG      = 1
+        COMMAND_INVALID     = 2
+        TYPE_WRONG          = 3
+        VALUE_INVALID       = 4
+        STORAGE_LOCKED      = 5
         COMMAND_UNAVAILABLE = 6
 
     class __Parameter(enum.IntEnum) :
+        HEARTBEAT_TIMEOUT     = 68
         SWITCH_LIMIT_POLARITY = 79
 
     __COMMAND_REPLY_LENGTH = 9
@@ -488,13 +526,15 @@ class Module(abc.ABC) :
         bank_number : int = 0,
         value : int = 0
     ) -> None :
-        Module.__command_request_transmit_port(
-            self.__port,
-            command,
-            type_number,
-            bank_number,
-            value
-        )
+        with self.__port_lock :
+            Module.__command_request_transmit_port(
+                self.__port,
+                self.__address,
+                command,
+                type_number,
+                bank_number,
+                value
+            )
 
     @classmethod
     def __command_reply_receive_port(cls, port : Port, address : int, command : __Command) -> int :
@@ -554,14 +594,18 @@ class Module(abc.ABC) :
         bank_number : int = 0,
         value : int = 0
     ) -> int :
-        return Module.__command_transceive_port(
-            self.__port,
-            self.__address,
-            command,
-            type_number,
-            bank_number,
-            value
-        )
+        with self.__port_lock :
+            reply = Module.__command_transceive_port(
+                self.__port,
+                self.__address,
+                command,
+                type_number,
+                bank_number,
+                value
+            )
+        if self.__heartbeat_event is not None :
+            self.__heartbeat_event.set()
+        return reply
 
     @classmethod
     def __address_verify(cls, address : int) -> None :
@@ -580,10 +624,38 @@ class Module(abc.ABC) :
             Module.__Command.CTL_FIRMWARE_VERSION_GET,
             Module.__CTL_FIRMWARE_VERSION_GET_TYPE_BINARY
         )
-        identity      = (value >> 16) & 0xFFFF
+        model_number  = (value >> 16) & 0xFFFF
         version_major = (value >>  8) & 0xFF
-        version_minor = (value      ) & 0xFF
-        return identity, (version_major, version_minor)
+        version_minor =  value        & 0xFF
+        return model_number, (version_major, version_minor)
+
+    def __heartbeat_setup(self, timeout_seconds : float) -> None :
+        activate = timeout_seconds != 0
+        active = self.__heartbeat_thread is not None
+        self.__heartbeat_event_timeout = timeout_seconds / 2
+        if activate == active :
+            if activate :
+                self.__heartbeat_event.set()
+            return
+        if activate :
+            self.__heartbeat_thread = threading.Thread(
+                target = self.__heartbeat,
+                daemon = True
+            )
+            self.__heartbeat_event = threading.Event()
+            self.__heartbeat_thread.start()
+        else :
+            self.__heartbeat_event.set()
+            self.__heartbeat_thread.join()
+            self.__heartbeat_event = None
+            self.__heartbeat_thread = None
+
+    def __heartbeat(self) -> None :
+        while self.__heartbeat_event_timeout != 0.0 :
+            if self.__heartbeat_event.wait(self.__heartbeat_event_timeout) :
+                self.__heartbeat_event.clear()
+            else :
+                self.__command_transceive(Module.__Command.CTL_APPLICATION_STATUS_GET)
 
     def __factory_settings_restore(self) -> None :
         self.__command_request_transmit(

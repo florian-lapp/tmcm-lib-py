@@ -1,4 +1,4 @@
-# TMCM-Lib – Trinamic Module Library for Python
+# TMCM-Lib – Trinamic Motion Control Module Library for Python
 
 This project aims to offer a clean high-level interface to the TMCM stepper motor controllers by
 Trinamic with TMCL firmware.
@@ -40,8 +40,8 @@ motor.switch_limit_right.enabled = True
 ### Identifying
 
 ``` python
-# Prints the identity of the module (e.g. "3110" for TMCM-3110).
-print(module.identity)
+# Prints the model number of the module (e.g. "3110" for TMCM-3110).
+print(module.model_number)
 # Prints the firmware version of the module (e.g. "(1, 14)" for 1.14).
 print(module.firmware_version)
 ```

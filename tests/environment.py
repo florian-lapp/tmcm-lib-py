@@ -8,6 +8,8 @@ class __Environment :
 
     PORT_NAME = 'COM1'
     ADDRESS = 1
+    # Milliseconds.
+    HEARTBEAT_TIMEOUT = 0
     # Millivolts.
     SUPPLY_VOLTAGE = 24000
     # Millivolts.
@@ -40,6 +42,7 @@ class __Environment :
         return self.__motors
 
     def reset(self) -> None :
+        self.__module.heartbeat_timeout = self.HEARTBEAT_TIMEOUT
         for motor in self.__module.motors :
             motor.stop()
             motor.current_moving = self.MOTOR_CURRENT_MOVING
