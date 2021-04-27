@@ -15,6 +15,8 @@ from tmcm_lib import Port, Module
 port = Port('COM1')
 # Constructs the module connected to the port.
 module = Module.construct(port)
+# Enables the pull-up resistors of the limit switches of the module.
+module.switch_limit_pullup_enabled = True
 # Sets the activity of the limit switches of the module (True = high, False = low).
 module.switch_limit_activity = True
 

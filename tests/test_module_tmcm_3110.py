@@ -1,5 +1,5 @@
 from tests.test_module import TestModule as TestModuleGeneric
-from tmcm_lib.tmcm_3110.module import Module
+from tmcm_lib.module_3110.module import Module
 
 class TestModule(TestModuleGeneric) :
 

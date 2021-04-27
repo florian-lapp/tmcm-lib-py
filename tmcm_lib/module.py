@@ -126,6 +126,16 @@ class Module(abc.ABC) :
         raise NotImplementedError()
 
     @property
+    def switch_limit_pullup_enabled(self) -> bool :
+        """Gets if the pull-up resistors of the limit switches of the module are enabled."""
+        raise NotImplementedError()
+
+    @property
+    def switch_limit_pullup_enabled(self, switch_limit_pullup_enabled) -> None :
+        """Sets if the pull-up resistors of the limit switches of the module are enabled."""
+        raise NotImplementedError()
+
+    @property
     def switch_limit_activity(self) -> bool :
         """
         Gets the activity of the limit switches of the module.
@@ -421,7 +431,7 @@ class Module(abc.ABC) :
             distance
         )
 
-    __MODULE_NAME = 'tmcm_{:04d}.module'
+    __MODULE_NAME = 'module_{:04d}.module'
     __CLASS_NAME = 'Module'
 
     class __Command(enum.IntEnum) :
