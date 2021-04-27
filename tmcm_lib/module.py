@@ -130,7 +130,7 @@ class Module(abc.ABC) :
         """Gets if the pull-up resistors of the limit switches of the module are enabled."""
         raise NotImplementedError()
 
-    @property
+    @switch_limit_pullup_enabled.setter
     def switch_limit_pullup_enabled(self, switch_limit_pullup_enabled) -> None :
         """Sets if the pull-up resistors of the limit switches of the module are enabled."""
         raise NotImplementedError()
