@@ -1,3 +1,8 @@
+"""TMCM-Lib – Trinamic Motion Control Module Library for Python"""
+
+VERSION = '1.0.0'
+"""Version of TMCM-Lib."""
+
 from .port import Port
 from .module import Module
 from .motor import Motor

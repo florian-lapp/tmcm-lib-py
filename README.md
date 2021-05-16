@@ -4,6 +4,30 @@ This project aims to offer a clean high-level interface to the TMCM stepper moto
 Trinamic with TMCL firmware.
 
 It currently only supports the module TMCM-3110 but others should be fairly easy to integrate.
+
+## Features
+
+- Object-oriented design
+- Documented public elements via type hints and docstrings
+- Signaling errors via exceptions
+- Blocking and non-blocking moving
+- Expressing currents, velocities, and accelerations in physical units
+- Reverting of motor direction per motor
+- Setting, getting, and moving to coordinates
+- Sending heartbeat messages automatically
+
+## Installing
+
+```
+pip install TMCM-Lib
+```
+
+## Importing
+
+``` python
+import tmcm_lib
+```
+
 ## Examples
 
 ### Configuring

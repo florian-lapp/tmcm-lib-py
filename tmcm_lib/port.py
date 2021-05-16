@@ -18,10 +18,11 @@ class Port :
             Name of the port.
         :param baud_rate:
             Baud rate at which data is exchanged via the port.
+
         :raises ValueError:
-            The baud rate is invalid or not supported by the port.
+            Baud rate invalid.
         :raises Unavailability:
-            The port is unavailable (e.g. in use or not connected).
+            Port unavailable (e.g. in use or not connected).
         """
         try :
             self.__serial = serial.Serial(

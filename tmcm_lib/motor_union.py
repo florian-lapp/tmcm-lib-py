@@ -126,7 +126,7 @@ class MotorUnion :
         """
         self.__coordinate_set(position)
         for motor in self.__motors :
-            motor._move_indicate(Motor._RampMode.POSITION)
+            motor._moving_begin(Motor._RampMode.POSITION)
         self.__module._motor_move_to_coordinate(
             self.__motor_numbers |
             (

@@ -483,7 +483,7 @@ class Motor(abc.ABC) :
         :param wait_while_moving:
             If the function waits while the motor is moving.
         """
-        self._move_indicate(Motor._RampMode.VELOCITY)
+        self._moving_begin(Motor._RampMode.VELOCITY)
         if not self.direction_reversed :
             self.__module._motor_rotate_right(self.__number, self.__velocity_moving_internal)
         else :
@@ -498,7 +498,7 @@ class Motor(abc.ABC) :
         :param wait_while_moving:
             If the function waits while the motor is moving.
         """
-        self._move_indicate(Motor._RampMode.VELOCITY)
+        self._moving_begin(Motor._RampMode.VELOCITY)
         if not self.direction_reversed :
             self.__module._motor_rotate_left(self.__number, self.__velocity_moving_internal)
         else :
@@ -528,7 +528,7 @@ class Motor(abc.ABC) :
         if not self.__moving and self.__position_valid and self.__position == position :
             return
         Motor._position_verify(position)
-        self._move_indicate(Motor._RampMode.POSITION)
+        self._moving_begin(Motor._RampMode.POSITION)
         self.__module._motor_move_to(self.__number, self.__direction_sign * position)
         if wait_while_moving :
             self.wait_while_moving()
@@ -548,7 +548,7 @@ class Motor(abc.ABC) :
         """
         if coordinate_number < 0 or coordinate_number >= self.__module.coordinate_count :
             raise ValueError('Coordinate number invalid: Value negative or exceeds limit.')
-        self._move_indicate(Motor._RampMode.POSITION)
+        self._moving_begin(Motor._RampMode.POSITION)
         self.__module._motor_move_to_coordinate(self.__number, coordinate_number)
         if wait_while_moving :
             self.wait_while_moving()
@@ -566,7 +566,7 @@ class Motor(abc.ABC) :
 
         :param distance:
             Position to move the motor to.
-            Values: Values: [`DISTANCE_MINIMUM`, `DISTANCE_MAXIMUM`]
+            Values: [`DISTANCE_MINIMUM`, `DISTANCE_MAXIMUM`]
         :param wait_while_moving:
             If the function waits while the motor is moving.
 
@@ -576,7 +576,7 @@ class Motor(abc.ABC) :
         if distance == 0 and not self.__moving :
             return
         Motor._distance_verify(distance)
-        self._move_indicate(Motor._RampMode.POSITION)
+        self._moving_begin(Motor._RampMode.POSITION)
         self.__module._motor_move_by(self.__number, self.__direction_sign * distance)
         if wait_while_moving :
             self.wait_while_moving()
@@ -656,7 +656,7 @@ class Motor(abc.ABC) :
         self.__velocity_extrema_update()
         self.__acceleration_extrema_update()
         self.__coordinates = Motor.Coordinates(self)
-        self._move_indicate(self._ramp_mode_get())
+        self._moving_begin(self._ramp_mode_get())
 
     @abc.abstractmethod
     def _velocity_moving_set_external(self, value : float) -> int :
@@ -894,11 +894,7 @@ class Motor(abc.ABC) :
         """Gets if the home switch of the motor is active."""
         return self.__parameter_get_bool(Motor.__Parameter.SWITCH_HOME_ACTIVE)
 
-    def _move_indicate(
-        self,
-        ramp_mode : _RampMode
-    ) -> None :
-        """Indicates a move of the motor."""
+    def _moving_begin(self, ramp_mode : _RampMode) -> None :
         self.__ramp_mode = ramp_mode
         self.__moving = True
         self.__moving_detect = (
@@ -908,6 +904,10 @@ class Motor(abc.ABC) :
         )
         self.__position_valid = False
         self.__position = 0
+
+    def _moving_end(self) -> None :
+        self.__moving_detect = self.__moving_detect_false
+        self.__moving = False
 
     class __Parameter(enum.IntEnum) :
         POSITION_TARGET         = 0
@@ -1028,8 +1028,7 @@ class Motor(abc.ABC) :
     def __moving_detect_position(self) -> bool :
         if not self._position_reached_get() :
             return True
-        self.__moving = False
-        self.__moving_detect = self.__moving_detect_false
+        self._moving_end()
         return False
 
     def __moving_detect_velocity(self) -> bool :
@@ -1044,6 +1043,5 @@ class Motor(abc.ABC) :
         velocity = self._velocity_actual_get()
         if velocity != 0 :
             return True
-        self.__moving = False
-        self.__moving_detect = self.__moving_detect_false
+        self._moving_end()
         return False
